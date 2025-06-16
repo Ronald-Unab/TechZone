@@ -2,33 +2,95 @@ import React, { useState } from "react";
 
 // Productos destacados para la Home
 const featuredProducts = [
-  { id: 1, name: "Mouse Gamer", desc: "Sensor óptico, RGB, 12000 DPI", price: 24.99, image: "/mouse.jpg" },
-  { id: 2, name: "Teclado Mecánico", desc: "Switch azul, retroiluminado", price: 39.99, image: "/teclado.jpg" },
-  { id: 3, name: "Headset Gamer", desc: "Sonido envolvente, micrófono", price: 29.99, image: "/headset.jpg" },
-  { id: 4, name: "Monitor 24\" FHD", desc: "IPS, 75Hz, HDMI", price: 109.99, image: "/monitor.jpg" },
+  {
+    id: 1,
+    name: "Mouse Gamer",
+    desc: "Sensor óptico, RGB, 12000 DPI",
+    price: 24.99,
+    image: "/mouse.jpg"
+  },
+  {
+    id: 2,
+    name: "Teclado Mecánico",
+    desc: "Switch azul, retroiluminado",
+    price: 39.99,
+    image: "/teclado.jpg"
+  },
+  {
+    id: 3,
+    name: "Headset Gamer",
+    desc: "Sonido envolvente, micrófono",
+    price: 29.99,
+    image: "/headset.jpg"
+  },
+  {
+    id: 4,
+    name: "Monitor 24\" FHD",
+    desc: "IPS, 75Hz, HDMI",
+    price: 109.99,
+    image: "/monitor.jpg"
+  },
 ];
 
 // Todos los productos del catálogo
 const catalogProducts = [
   ...featuredProducts,
-  { id: 5, name: "Memoria RAM 16GB DDR4", desc: "3200MHz, CL16", price: 47.99, image: "/ram.jpg" },
-  { id: 6, name: "Disco SSD 1TB", desc: "NVMe Gen3, 3500MB/s", price: 59.99, image: "/ssd.jpg" },
-  { id: 7, name: "Tarjeta de Video GTX 1660", desc: "6GB GDDR5", price: 210.99, image: "/gpu.jpg" },
-  { id: 8, name: "Procesador Ryzen 5 5600G", desc: "6 núcleos, 12 hilos", price: 154.99, image: "/cpu.jpg" },
-  { id: 9, name: "Fuente 650W 80+ Bronze", desc: "Alta eficiencia, silenciosa", price: 39.99, image: "/psu.jpg" },
-  { id: 10, name: "Gabinete RGB", desc: "Ventiladores incluidos, lateral vidrio", price: 64.99, image: "/case.jpg" },
+  {
+    id: 5,
+    name: "Memoria RAM 16GB DDR4",
+    desc: "3200MHz, CL16",
+    price: 47.99,
+    image: "/ram.jpg"
+  },
+  {
+    id: 6,
+    name: "Disco SSD 1TB",
+    desc: "NVMe Gen3, 3500MB/s",
+    price: 59.99,
+    image: "/ssd.jpg"
+  },
+  {
+    id: 7,
+    name: "Tarjeta de Video GTX 1660",
+    desc: "6GB GDDR5",
+    price: 210.99,
+    image: "/gpu.jpg"
+  },
+  {
+    id: 8,
+    name: "Procesador Ryzen 5 5600G",
+    desc: "6 núcleos, 12 hilos",
+    price: 154.99,
+    image: "/cpu.jpg"
+  },
+  {
+    id: 9,
+    name: "Fuente 650W 80+ Bronze",
+    desc: "Alta eficiencia, silenciosa",
+    price: 39.99,
+    image: "/psu.jpg"
+  },
+  {
+    id: 10,
+    name: "Gabinete RGB",
+    desc: "Ventiladores incluidos, lateral vidrio",
+    price: 64.99,
+    image: "/case.jpg"
+  }
 ];
 
 export default function App() {
   const [message, setMessage] = useState("");
   const [view, setView] = useState("home");
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState([]); // [{product, quantity}]
 
+  // Navegación
   function handleNav(section) {
     setView(section);
     setMessage("");
   }
 
+  // Añadir al carrito
   function handleAddToCart(product) {
     setCart(prev => {
       const idx = prev.findIndex(item => item.product.id === product.id);
@@ -44,10 +106,12 @@ export default function App() {
     setTimeout(() => setMessage(""), 1800);
   }
 
+  // Quitar del carrito
   function handleRemoveFromCart(id) {
     setCart(prev => prev.filter(item => item.product.id !== id));
   }
 
+  // Cambiar cantidad en carrito
   function handleChangeQty(id, delta) {
     setCart(prev => prev.map(item => {
       if (item.product.id === id) {
@@ -58,10 +122,12 @@ export default function App() {
     }));
   }
 
+  // Total carrito
   function cartTotal() {
     return cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0).toFixed(2);
   }
 
+  // Componente productos
   function ProductGrid({ products }) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -81,6 +147,7 @@ export default function App() {
     );
   }
 
+  // Componente carrito
   function Cart() {
     if (cart.length === 0) {
       return <div className="text-zinc-400">El carrito está vacío.</div>;
