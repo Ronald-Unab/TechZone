@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import Register from "./Register";
+import Login from "./Login";
 
 // Productos destacados para la Home
 const featuredProducts = [
@@ -80,28 +82,53 @@ const catalogProducts = [
 ];
 
 export default function App() {
+
   const [message, setMessage] = useState("");
-  const [view, setView] = useState("home");
-  const [cart, setCart] = useState([]); // [{product, quantity}]
+  const [user, setUser] = useState(localStorage.getItem("currentUser"));
+  const [view, setView] = useState(user ? "home" : "login");
+  const [cart, setCart] = useState([]);
+
+  useEffect(() => {
+    const currentUser = localStorage.getItem('currentUser');
+    if (currentUser) {
+      setUser(currentUser);
+      const savedCart = JSON.parse(localStorage.getItem(`cart_${currentUser}`)) || [];
+      setCart(savedCart);
+    }
+  }, []);
 
   // Navegación
   function handleNav(section) {
-    setView(section);
+    if (!user && (section === "home" || section === "catalog" || section === "cart")) {
+      setView("login");
+    } else {
+      setView(section);
+    }
     setMessage("");
   }
 
   // Añadir al carrito
   function handleAddToCart(product) {
-    setCart(prev => {
-      const idx = prev.findIndex(item => item.product.id === product.id);
-      if (idx >= 0) {
-        const updated = [...prev];
-        updated[idx].quantity++;
-        return updated;
-      } else {
-        return [...prev, { product, quantity: 1 }];
-      }
-    });
+    const existing = cart.find(item => item.product.id === product.id);
+
+    let updatedCart;
+    if (existing) {
+      updatedCart = cart.map(item => {
+        if (item.product.id === product.id) {
+          return { ...item, quantity: item.quantity + 1 };
+        }
+        return item;
+      });
+    } else {
+      updatedCart = [...cart, { product, quantity: 1 }];
+    }
+
+    setCart(updatedCart);
+
+    if (user) {
+      localStorage.setItem(`cart_${user}`, JSON.stringify(updatedCart));
+    }
+
     setMessage(`Producto "${product.name}" agregado al carrito.`);
     setTimeout(() => setMessage(""), 1800);
   }
@@ -190,21 +217,38 @@ export default function App() {
         <div className="container mx-auto flex justify-between items-center">
           <h1 className="text-2xl font-bold cursor-pointer text-blue-400" onClick={() => handleNav("home")}>TechZone</h1>
           <nav>
-            <ul className="flex gap-6">
+            <ul className="flex gap-6 items-center">
               <li>
                 <button onClick={() => handleNav("home")}
-                        className={`hover:underline ${view === "home" ? "font-bold underline" : ""}`}>Inicio</button>
+                  className={`hover:underline ${view === "home" ? "font-bold underline" : ""}`}>Inicio</button>
               </li>
-              <li>
-                <button onClick={() => handleNav("catalog")}
-                        className={`hover:underline ${view === "catalog" ? "font-bold underline" : ""}`}>Catálogo</button>
-              </li>
-              <li>
-                <button onClick={() => handleNav("cart")}
-                        className={`hover:underline ${view === "cart" ? "font-bold underline" : ""}`}>
-                  Carrito ({cart.reduce((sum, item) => sum + item.quantity, 0)})
-                </button>
-              </li>
+              {user && (
+                <>
+                  <li>
+                    <button onClick={() => handleNav("catalog")}
+                      className={`hover:underline ${view === "catalog" ? "font-bold underline" : ""}`}>Catálogo</button>
+                  </li>
+                  <li>
+                    <button onClick={() => handleNav("cart")}
+                      className={`hover:underline ${view === "cart" ? "font-bold underline" : ""}`}>
+                      Carrito ({cart.reduce((sum, item) => sum + item.quantity, 0)})
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={() => {
+                        localStorage.removeItem("currentUser");
+                        setUser(null);
+                        setCart([]);
+                        setView("login");
+                      }}
+                      className="bg-red-500 text-white px-3 py-1 rounded-lg text-sm"
+                    >
+                      Cerrar sesión
+                    </button>
+                  </li>
+                </>
+              )}
             </ul>
           </nav>
         </div>
@@ -215,23 +259,70 @@ export default function App() {
             {message}
           </div>
         )}
-        {view === "home" && (
-          <section className="mb-12">
-            <h2 className="text-xl font-semibold mb-2 text-zinc-200">Productos destacados</h2>
-            <ProductGrid products={featuredProducts} />
-          </section>
-        )}
-        {view === "catalog" && (
-          <section>
-            <h2 className="text-xl font-semibold mb-2 text-zinc-200">Catálogo completo</h2>
-            <ProductGrid products={catalogProducts} />
-          </section>
-        )}
-        {view === "cart" && (
-          <section>
-            <h2 className="text-xl font-semibold mb-2 text-zinc-200">Carrito de compras</h2>
-            <Cart />
-          </section>
+        {!user ? (
+          <>
+            {view === "login" && (
+              <div className="max-w-md mx-auto text-zinc-300">
+                <Login onLogin={(username) => { setUser(username); setView("home"); }} />
+                <p className="text-sm text-center mt-4">
+                  ¿No tienes cuenta?{" "}
+                  <button
+                    onClick={() => setView("register")}
+                    className="text-blue-400 underline"
+                  >
+                    Regístrate aquí
+                  </button>
+                </p>
+              </div>
+            )}
+            {view === "register" && (
+              <div className="max-w-md mx-auto text-zinc-300">
+                <Register onRegister={(username) => { setUser(username); setView("home"); }} />
+                <p className="text-sm text-center mt-4">
+                  ¿Ya estás registrado?{" "}
+                  <button
+                    onClick={() => setView("login")}
+                    className="text-blue-400 underline"
+                  >
+                    Inicia sesión
+                  </button>
+                </p>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {view === "home" && (
+              <section className="mb-12">
+                <h2 className="text-xl font-semibold mb-2 text-zinc-200">Productos destacados</h2>
+                <ProductGrid products={featuredProducts} />
+              </section>
+            )}
+            {view === "catalog" && (
+              <section>
+                {user ? (
+                  <>
+                    <h2 className="text-xl font-semibold mb-2 text-zinc-200">Catálogo completo</h2>
+                    <ProductGrid products={catalogProducts} />
+                  </>
+                ) : (
+                  <p className="text-red-500">Debes iniciar sesión para ver el catálogo.</p>
+                )}
+              </section>
+            )}
+            {view === "cart" && (
+              <section>
+                {user ? (
+                  <>
+                    <h2 className="text-xl font-semibold mb-2 text-zinc-200">Carrito de compras</h2>
+                    <Cart />
+                  </>
+                ) : (
+                  <p className="text-red-500">Debes iniciar sesión para ver el carrito.</p>
+                )}
+              </section>
+            )}
+          </>
         )}
       </main>
       <footer className="bg-zinc-900 text-zinc-400 py-6 mt-12 border-t border-zinc-800">
