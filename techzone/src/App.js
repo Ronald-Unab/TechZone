@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Register from "./Register";
 import Login from "./Login";
+import ManageProducts from "./ManageProducts";
 
 // Productos destacados para la Home
 const featuredProducts = [
@@ -87,6 +88,8 @@ export default function App() {
   const [user, setUser] = useState(localStorage.getItem("currentUser"));
   const [view, setView] = useState(user ? "home" : "login");
   const [cart, setCart] = useState([]);
+  const [userProducts, setUserProducts] = useState([]);
+
 
   useEffect(() => {
     const currentUser = localStorage.getItem('currentUser');
@@ -94,6 +97,9 @@ export default function App() {
       setUser(currentUser);
       const savedCart = JSON.parse(localStorage.getItem(`cart_${currentUser}`)) || [];
       setCart(savedCart);
+      const savedProducts = JSON.parse(localStorage.getItem("userProducts")) || [];
+      const othersProducts = savedProducts.filter(p => p.owner !== currentUser);
+      setUserProducts(othersProducts);
     }
   }, []);
 
@@ -225,6 +231,12 @@ export default function App() {
               {user && (
                 <>
                   <li>
+                    <button onClick={() => handleNav("manage")}
+                      className={`hover:underline ${view === "manage" ? "font-bold underline" : ""}`}>
+                      Administrar
+                    </button>
+                  </li>
+                  <li>
                     <button onClick={() => handleNav("catalog")}
                       className={`hover:underline ${view === "catalog" ? "font-bold underline" : ""}`}>Catálogo</button>
                   </li>
@@ -303,7 +315,7 @@ export default function App() {
                 {user ? (
                   <>
                     <h2 className="text-xl font-semibold mb-2 text-zinc-200">Catálogo completo</h2>
-                    <ProductGrid products={catalogProducts} />
+                    <ProductGrid products={[...catalogProducts, ...userProducts]} />
                   </>
                 ) : (
                   <p className="text-red-500">Debes iniciar sesión para ver el catálogo.</p>
@@ -319,6 +331,15 @@ export default function App() {
                   </>
                 ) : (
                   <p className="text-red-500">Debes iniciar sesión para ver el carrito.</p>
+                )}
+              </section>
+            )}
+            {view === "manage" && (
+              <section>
+                {user ? (
+                  <ManageProducts />
+                ) : (
+                  <p className="text-red-500">Debes iniciar sesión para acceder a esta sección.</p>
                 )}
               </section>
             )}
