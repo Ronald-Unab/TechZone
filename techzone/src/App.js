@@ -10,28 +10,32 @@ const featuredProducts = [
     name: "Mouse Gamer",
     desc: "Sensor óptico, RGB, 12000 DPI",
     price: 24.99,
-    image: "/mouse.jpg"
+    image: "/mouse.jpg",
+    category: "PC"
   },
   {
     id: 2,
     name: "Teclado Mecánico",
     desc: "Switch azul, retroiluminado",
     price: 39.99,
-    image: "/teclado.jpg"
+    image: "/teclado.jpg",
+    category: "PC"
   },
   {
     id: 3,
     name: "Headset Gamer",
     desc: "Sonido envolvente, micrófono",
     price: 29.99,
-    image: "/headset.jpg"
+    image: "/headset.jpg",
+    category: "Accesorios"
   },
   {
     id: 4,
     name: "Monitor 24\" FHD",
     desc: "IPS, 75Hz, HDMI",
     price: 109.99,
-    image: "/monitor.jpg"
+    image: "/monitor.jpg",
+    category: "PC"
   },
 ];
 
@@ -43,42 +47,48 @@ const catalogProducts = [
     name: "Memoria RAM 16GB DDR4",
     desc: "3200MHz, CL16",
     price: 47.99,
-    image: "/ram.jpg"
+    image: "/ram.jpg",
+    category: "PC"
   },
   {
     id: 6,
     name: "Disco SSD 1TB",
     desc: "NVMe Gen3, 3500MB/s",
     price: 59.99,
-    image: "/ssd.jpg"
+    image: "/ssd.jpg",
+    category: "PC"
   },
   {
     id: 7,
     name: "Tarjeta de Video GTX 1660",
     desc: "6GB GDDR5",
     price: 210.99,
-    image: "/gpu.jpg"
+    image: "/gpu.jpg",
+    category: "PC"
   },
   {
     id: 8,
     name: "Procesador Ryzen 5 5600G",
     desc: "6 núcleos, 12 hilos",
     price: 154.99,
-    image: "/cpu.jpg"
+    image: "/cpu.jpg",
+    category: "PC"
   },
   {
     id: 9,
     name: "Fuente 650W 80+ Bronze",
     desc: "Alta eficiencia, silenciosa",
     price: 39.99,
-    image: "/psu.jpg"
+    image: "/psu.jpg",
+    category: "PC"
   },
   {
     id: 10,
     name: "Gabinete RGB",
     desc: "Ventiladores incluidos, lateral vidrio",
     price: 64.99,
-    image: "/case.jpg"
+    image: "/case.jpg",
+    category: "PC"
   }
 ];
 
@@ -141,23 +151,54 @@ export default function App() {
 
   // Quitar del carrito
   function handleRemoveFromCart(id) {
-    setCart(prev => prev.filter(item => item.product.id !== id));
+    setCart(prev => {
+      const updated = prev.filter(item => item.product.id !== id);
+      if (user) {
+        localStorage.setItem(`cart_${user}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
   }
 
   // Cambiar cantidad en carrito
   function handleChangeQty(id, delta) {
-    setCart(prev => prev.map(item => {
-      if (item.product.id === id) {
-        const qty = Math.max(1, item.quantity + delta);
-        return { ...item, quantity: qty };
+    setCart(prev => {
+      const updated = prev.map(item => {
+        if (item.product.id === id) {
+          const qty = Math.max(1, item.quantity + delta);
+          return { ...item, quantity: qty };
+        }
+        return item;
+      });
+      if (user) {
+        localStorage.setItem(`cart_${user}`, JSON.stringify(updated));
       }
-      return item;
-    }));
+      return updated;
+    });
   }
 
   // Total carrito
   function cartTotal() {
     return cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0).toFixed(2);
+  }
+
+  function handleCheckout() {
+    if (cart.length === 0) {
+      alert("Tu carrito está vacío.");
+      return;
+    }
+
+    const currentUser = localStorage.getItem("currentUser");
+    const historyKey = `history_${currentUser}`;
+
+    const previous = JSON.parse(localStorage.getItem(historyKey)) || [];
+    const newHistory = [...previous, { id: Date.now(), items: cart }];
+
+    localStorage.setItem(historyKey, JSON.stringify(newHistory));
+    localStorage.setItem(`cart_${currentUser}`, JSON.stringify([]));
+    setCart([]);
+    setMessage("¡Compra finalizada!");
+    setTimeout(() => setMessage(""), 1800);
   }
 
   // Componente productos
@@ -174,6 +215,28 @@ export default function App() {
               onClick={() => handleAddToCart(prod)}>
               Agregar al carrito
             </button>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  function GroupedCatalog({ products }) {
+    const grouped = {};
+
+    products.forEach(prod => {
+      if (!grouped[prod.category]) {
+        grouped[prod.category] = [];
+      }
+      grouped[prod.category].push(prod);
+    });
+
+    return (
+      <div className="space-y-10">
+        {Object.keys(grouped).map(category => (
+          <div key={category}>
+            <h3 className="text-xl font-bold mb-4 text-zinc-100 border-b border-zinc-700 pb-2">{category}</h3>
+            <ProductGrid products={grouped[category]} />
           </div>
         ))}
       </div>
@@ -213,6 +276,113 @@ export default function App() {
           ))}
         </ul>
         <div className="text-right font-semibold text-lg mt-4 text-zinc-200">Total: ${cartTotal()}</div>
+        <button
+          onClick={handleCheckout}
+          className="mt-4 bg-green-600 text-white px-4 py-2 rounded-xl hover:bg-green-700 transition"
+        >
+          Finalizar compra
+        </button>
+      </div>
+    );
+  }
+
+  function PurchaseHistory() {
+    const currentUser = localStorage.getItem("currentUser");
+    const [history, setHistory] = useState([]);
+
+    useEffect(() => {
+      const saved = JSON.parse(localStorage.getItem(`history_${currentUser}`)) || [];
+      setHistory(saved);
+    }, [currentUser]);
+
+    const handleReAddToCart = (items) => {
+      const updated = [...cart];
+      items.forEach(({ product, quantity }) => {
+        const existing = updated.find(item => item.product.id === product.id);
+        if (existing) {
+          existing.quantity += quantity;
+        } else {
+          updated.push({ product, quantity });
+        }
+      });
+      setCart(updated);
+      localStorage.setItem(`cart_${currentUser}`, JSON.stringify(updated));
+      setMessage("Productos agregados desde el historial");
+      setTimeout(() => setMessage(""), 1800);
+    };
+
+    const handleClearHistory = () => {
+      if (window.confirm("¿Seguro que quieres borrar tu historial de compras?")) {
+        localStorage.removeItem(`history_${currentUser}`);
+        setHistory([]);
+      }
+    };
+
+    return (
+      <div className="max-w-3xl mx-auto text-zinc-200">
+        <h2 className="text-xl font-bold mb-4">Historial de compras</h2>
+        {history.length === 0 ? (
+          <p className="text-zinc-400">No hay compras previas.</p>
+        ) : (
+          <>
+            <ul className="space-y-6">
+              {history.map(order => (
+                <li key={order.id} className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
+                  <h4 className="font-semibold text-lg mb-2">Compra #{order.id}</h4>
+                  <ul className="space-y-1">
+                    {order.items.map(item => (
+                      <li key={item.product.id}>
+                        {item.quantity}× {item.product.name} (${item.product.price})
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    onClick={() => handleReAddToCart(order.items)}
+                    className="mt-3 bg-blue-600 px-3 py-1 text-sm rounded text-white"
+                  >
+                    Volver a agregar al carrito
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button
+              onClick={handleClearHistory}
+              className="mt-6 bg-red-600 px-4 py-2 rounded text-white hover:bg-red-700"
+            >
+              Borrar historial
+            </button>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  function Checkout() {
+    const total = cartTotal();
+
+    return (
+      <div className="max-w-2xl mx-auto text-zinc-200">
+        <h2 className="text-2xl font-bold mb-6 text-center text-blue-400">Resumen del Pedido</h2>
+        <ul className="mb-6">
+          {cart.map(item => (
+            <li key={item.product.id} className="flex justify-between items-center border-b border-zinc-700 py-2">
+              <span>{item.product.name} (x{item.quantity})</span>
+              <span>${(item.product.price * item.quantity).toFixed(2)}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="text-right font-semibold text-lg mb-6">Total: ${total}</div>
+        <button
+          onClick={() => {
+            setCart([]);
+            localStorage.setItem(`cart_${user}`, JSON.stringify([]));
+            setMessage("¡Gracias por tu compra!");
+            setView("home");
+          }}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-xl transition"
+        >
+          Confirmar compra
+        </button>
       </div>
     );
   }
@@ -244,6 +414,12 @@ export default function App() {
                     <button onClick={() => handleNav("cart")}
                       className={`hover:underline ${view === "cart" ? "font-bold underline" : ""}`}>
                       Carrito ({cart.reduce((sum, item) => sum + item.quantity, 0)})
+                    </button>
+                  </li>
+                  <li>
+                    <button onClick={() => handleNav("history")}
+                      className={`hover:underline ${view === "history" ? "font-bold underline" : ""}`}>
+                      Historial
                     </button>
                   </li>
                   <li>
@@ -315,7 +491,7 @@ export default function App() {
                 {user ? (
                   <>
                     <h2 className="text-xl font-semibold mb-2 text-zinc-200">Catálogo completo</h2>
-                    <ProductGrid products={[...catalogProducts, ...userProducts]} />
+                    <GroupedCatalog products={[...catalogProducts, ...userProducts]} />
                   </>
                 ) : (
                   <p className="text-red-500">Debes iniciar sesión para ver el catálogo.</p>
@@ -332,6 +508,16 @@ export default function App() {
                 ) : (
                   <p className="text-red-500">Debes iniciar sesión para ver el carrito.</p>
                 )}
+              </section>
+            )}
+            {view === "checkout" && (
+              <section>
+                <Checkout />
+              </section>
+            )}
+            {view === "history" && (
+              <section>
+                <PurchaseHistory />
               </section>
             )}
             {view === "manage" && (

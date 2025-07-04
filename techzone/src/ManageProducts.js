@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 
 export default function ManageProducts() {
   const [products, setProducts] = useState([]);
-  const [form, setForm] = useState({ id: null, name: "", desc: "", price: "", image: "", file: null });
+  const [form, setForm] = useState({ id: null, name: "", desc: "", price: "", category: "", image: "", file: null });
   const [editMode, setEditMode] = useState(false);
 
   // Cargar productos desde localStorage
@@ -24,7 +24,7 @@ export default function ManageProducts() {
   };
 
   const handleAdd = () => {
-    if (!form.name || !form.desc || !form.price || !form.file) {
+    if (!form.name || !form.desc || !form.price || !form.file || !form.category) {
       return alert("Todos los campos son obligatorios");
     }
 
@@ -36,6 +36,7 @@ export default function ManageProducts() {
       desc: form.desc,
       price: parseFloat(form.price),
       image: form.file ? URL.createObjectURL(form.file) : "",
+      category: form.category,
       owner: currentUser
     };
 
@@ -53,7 +54,7 @@ export default function ManageProducts() {
   const handleUpdate = () => {
     const updatedList = products.map(p => p.id === form.id ? { ...form, price: parseFloat(form.price) } : p);
     saveProducts(updatedList);
-    setForm({ id: null, name: "", desc: "", price: "", file: null });
+    setForm({ id: null, name: "", desc: "", price: "", category: "", file: null });
     setEditMode(false);
   };
 
@@ -86,6 +87,18 @@ export default function ManageProducts() {
             onChange={handleChange}
             className="border p-2 rounded bg-zinc-700 text-white"
           />
+          <select
+            name="category"
+            value={form.category || ""}
+            onChange={handleChange}
+            className="border p-2 rounded bg-zinc-700 text-white"
+          >
+            <option value="">Selecciona una categoría</option>
+            <option value="PC">PC</option>
+            <option value="Consolas">Consolas</option>
+            <option value="Accesorios">Accesorios</option>
+            <option value="Móviles">Móviles</option>
+          </select>
           <input
             type="number"
             name="price"
