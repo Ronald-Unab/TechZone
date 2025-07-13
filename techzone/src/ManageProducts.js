@@ -2,65 +2,154 @@ import React, { useState, useEffect } from "react";
 
 export default function ManageProducts() {
   const [products, setProducts] = useState([]);
-  const [form, setForm] = useState({ id: null, name: "", desc: "", price: "", category: "", image: "", file: null });
+  const [form, setForm] = useState({
+    _id: null,
+    name: "",
+    desc: "",
+    price: "",
+    category: "",
+    image: "",
+    file: null
+  });
   const [editMode, setEditMode] = useState(false);
 
-  // Cargar productos desde localStorage
   useEffect(() => {
-    const currentUser = localStorage.getItem("currentUser");
-    const saved = JSON.parse(localStorage.getItem("userProducts")) || [];
-    const mine = saved.filter(p => p.owner === currentUser);
-    setProducts(mine);
+    fetchProducts();
   }, []);
 
-  // Guardar en localStorage
-  const saveProducts = (updatedList) => {
-    setProducts(updatedList);
-    localStorage.setItem("userProducts", JSON.stringify(updatedList));
+  const fetchProducts = async () => {
+    try {
+      const response = await fetch("http://localhost:5000/api/products");
+      const data = await response.json();
+      const currentUser = localStorage.getItem("currentUser");
+      const userProducts = data.filter(p => p.owner === currentUser); // <-- filtrar por usuario
+      setProducts(userProducts);
+    } catch (error) {
+      console.error("Error al cargar productos:", error);
+    }
   };
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleAdd = () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
     if (!form.name || !form.desc || !form.price || !form.file || !form.category) {
       return alert("Todos los campos son obligatorios");
     }
 
-    const currentUser = localStorage.getItem("currentUser");
+    const formData = new FormData();
+    formData.append("name", form.name);
+    formData.append("desc", form.desc);
+    formData.append("price", form.price);
+    formData.append("category", form.category);
+    formData.append("image", form.file);
+    formData.append("owner", localStorage.getItem("currentUser"));
 
-    const newProduct = {
-      id: Date.now(),
-      name: form.name,
-      desc: form.desc,
-      price: parseFloat(form.price),
-      image: form.file ? URL.createObjectURL(form.file) : "",
-      category: form.category,
-      owner: currentUser
-    };
+    try {
+      console.log("🧾 Enviando datos:");
+      for (let pair of formData.entries()) {
+        console.log(pair[0], pair[1]);
+      }
 
-    const updatedList = [...products, newProduct];
-    saveProducts(updatedList);
-    setForm({ id: null, name: "", desc: "", price: "", file: null });
-    setEditMode(false);
+      const response = await fetch("http://localhost:5000/api/products", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        alert("✅ Producto agregado con éxito");
+        setForm({
+          _id: null,
+          name: "",
+          desc: "",
+          price: "",
+          category: "",
+          image: "",
+          file: null
+        });
+        fetchProducts();
+      } else {
+        const error = await response.json();
+        console.error("❌ Error del servidor:", error);
+        alert("❌ Error al guardar producto");
+      }
+    } catch (error) {
+      console.error("❌ Error al guardar:", error);
+    }
   };
 
   const handleEdit = (product) => {
-    setForm(product);
+    setForm({
+      _id: product._id,
+      name: product.name,
+      desc: product.desc,
+      price: product.price,
+      category: product.category,
+      image: product.image,
+      file: null
+    });
     setEditMode(true);
   };
 
-  const handleUpdate = () => {
-    const updatedList = products.map(p => p.id === form.id ? { ...form, price: parseFloat(form.price) } : p);
-    saveProducts(updatedList);
-    setForm({ id: null, name: "", desc: "", price: "", category: "", file: null });
-    setEditMode(false);
+  const handleUpdate = async () => {
+    if (!form.name || !form.desc || !form.price || !form.category) {
+      return alert("Todos los campos son obligatorios");
+    }
+
+    const formData = new FormData();
+    formData.append("name", form.name);
+    formData.append("desc", form.desc);
+    formData.append("price", form.price);
+    formData.append("category", form.category);
+    if (form.file) {
+      formData.append("image", form.file);
+    }
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/products/${form._id}`, {
+        method: "PUT",
+        body: formData,
+      });
+
+      if (response.ok) {
+        alert("✏️ Producto actualizado correctamente");
+        setForm({
+          _id: null,
+          name: "",
+          desc: "",
+          price: "",
+          category: "",
+          image: "",
+          file: null
+        });
+        setEditMode(false);
+        fetchProducts();
+      } else {
+        alert("❌ Error al actualizar producto");
+      }
+    } catch (error) {
+      console.error("❌ Error al actualizar:", error);
+    }
   };
 
-  const handleDelete = (id) => {
-    const updatedList = products.filter(p => p.id !== id);
-    saveProducts(updatedList);
+  const handleDelete = async (id) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/products/${id}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        alert("🗑️ Producto eliminado");
+        fetchProducts();
+      } else {
+        alert("+❌ No se pudo eliminar");
+      }
+    } catch (error) {
+      console.error("❌ Error al eliminar:", error);
+    }
   };
 
   return (
@@ -70,7 +159,7 @@ export default function ManageProducts() {
       {/* Formulario */}
       <div className="bg-zinc-800 p-4 rounded-lg mb-8 max-w-xl mx-auto">
         <h3 className="text-lg font-semibold mb-4">Agregar / Editar producto</h3>
-        <div className="grid gap-3">
+        <form onSubmit={editMode ? handleUpdate : handleSubmit} className="grid gap-3">
           <input
             type="text"
             name="name"
@@ -112,16 +201,13 @@ export default function ManageProducts() {
             onChange={(e) => setForm({ ...form, file: e.target.files[0] })}
             className="border p-2 rounded bg-zinc-700 text-white"
           />
-          {editMode ? (
-            <button onClick={handleUpdate} className="bg-yellow-500 text-black p-2 rounded font-bold">
-              Guardar cambios
-            </button>
-          ) : (
-            <button onClick={handleAdd} className="bg-blue-600 text-white p-2 rounded font-bold">
-              Agregar producto
-            </button>
-          )}
-        </div>
+          <button
+            type="submit"
+            className={`${editMode ? "bg-yellow-500 text-black" : "bg-blue-600 text-white"} p-2 rounded font-bold`}
+          >
+            {editMode ? "Guardar cambios" : "Agregar producto"}
+          </button>
+        </form>
       </div>
 
       {/* Lista de productos */}
@@ -130,8 +216,12 @@ export default function ManageProducts() {
           <p className="text-center text-zinc-400 col-span-full">Aún no has agregado productos.</p>
         ) : (
           products.map(product => (
-            <div key={product.id} className="border border-zinc-700 p-4 rounded bg-zinc-800 shadow">
-              <img src={product.image} alt={product.name} className="w-full h-40 object-cover rounded mb-2" />
+            <div key={product._id} className="border border-zinc-700 p-4 rounded bg-zinc-800 shadow">
+              <img
+                src={`http://localhost:5000/uploads/${product.image}`}
+                alt={product.name}
+                className="w-full h-40 object-cover rounded mb-2"
+              />
               <h3 className="font-semibold text-lg">{product.name}</h3>
               <p className="text-sm text-zinc-300">{product.desc}</p>
               <p className="font-bold text-green-400">${product.price}</p>
@@ -143,7 +233,7 @@ export default function ManageProducts() {
                   Editar
                 </button>
                 <button
-                  onClick={() => handleDelete(product.id)}
+                  onClick={() => handleDelete(product._id)}
                   className="bg-red-600 text-white px-3 py-1 rounded text-sm"
                 >
                   Eliminar

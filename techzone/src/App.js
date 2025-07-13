@@ -107,9 +107,12 @@ export default function App() {
       setUser(currentUser);
       const savedCart = JSON.parse(localStorage.getItem(`cart_${currentUser}`)) || [];
       setCart(savedCart);
-      const savedProducts = JSON.parse(localStorage.getItem("userProducts")) || [];
-      const othersProducts = savedProducts.filter(p => p.owner !== currentUser);
-      setUserProducts(othersProducts);
+      fetch("http://localhost:5000/api/products")
+        .then(res => res.json())
+        .then(data => {
+          const others = data.filter(p => p.owner !== currentUser);
+          setUserProducts(others);
+        });
     }
   }, []);
 
