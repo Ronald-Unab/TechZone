@@ -4,25 +4,27 @@ export default function Register({ onRegister }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
 
-    // Cargar usuarios existentes
-    const savedUsers = JSON.parse(localStorage.getItem('users')) || [];
+    try {
+      const response = await fetch("http://localhost:5000/api/users/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+      });
 
-    // Verificar si el usuario ya existe
-    const exists = savedUsers.some(u => u.username === username);
-    if (exists) {
-      alert("El usuario ya está registrado. Intenta iniciar sesión.");
-      return;
+      if (response.ok) {
+        localStorage.setItem("currentUser", username);
+        onRegister(username);
+      } else {
+        const error = await response.json();
+        alert(error.message || "Error al registrar");
+      }
+    } catch (err) {
+      alert("Error al conectar con el servidor");
+      console.error(err);
     }
-
-    // Agregar nuevo usuario
-    const newUser = { username, password };
-    const updatedUsers = [...savedUsers, newUser];
-    localStorage.setItem('users', JSON.stringify(updatedUsers));
-    localStorage.setItem('currentUser', username);
-    onRegister(username);
   }
 
   return (

@@ -4,26 +4,28 @@ export default function Login({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleSubmit = (e) => {
+  async function handleSubmit(e) {
     e.preventDefault();
-    const savedUsers = JSON.parse(localStorage.getItem('users')) || [];
 
-    // Si no hay usuarios registrados
-    if (savedUsers.length === 0) {
-      alert("No hay usuarios registrados. Por favor, regístrate primero.");
-      return;
+    try {
+      const response = await fetch("http://localhost:5000/api/users/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+      });
+
+      if (response.ok) {
+        localStorage.setItem("currentUser", username);
+        onLogin(username);
+      } else {
+        const error = await response.json();
+        alert(error.message || "Usuario o contraseña incorrectos");
+      }
+    } catch (err) {
+      alert("Error al conectar con el servidor");
+      console.error(err);
     }
-
-    // Buscar coincidencia por nombre y contraseña
-    const foundUser = savedUsers.find(u => u.username === username && u.password === password);
-
-    if (foundUser) {
-      localStorage.setItem('currentUser', username);
-      onLogin(username);
-    } else {
-      alert("Usuario o contraseña incorrectos.");
-    }
-  };
+  }
 
   return (
     <form onSubmit={handleSubmit} className="mb-4 p-4 bg-zinc-900 rounded-xl border border-zinc-800">

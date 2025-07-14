@@ -100,6 +100,15 @@ export default function App() {
   const [cart, setCart] = useState([]);
   const [userProducts, setUserProducts] = useState([]);
 
+  const refreshProducts = async () => {
+    const currentUser = localStorage.getItem("currentUser");
+    const res = await fetch("http://localhost:5000/api/products");
+    const data = await res.json();
+    const mine = data.filter(p => p.owner === currentUser);
+    const others = data.filter(p => p.owner !== currentUser);
+    localStorage.setItem("myProducts", JSON.stringify(mine));
+    setUserProducts(others);
+  };
 
   useEffect(() => {
     const currentUser = localStorage.getItem('currentUser');
@@ -107,12 +116,7 @@ export default function App() {
       setUser(currentUser);
       const savedCart = JSON.parse(localStorage.getItem(`cart_${currentUser}`)) || [];
       setCart(savedCart);
-      fetch("http://localhost:5000/api/products")
-        .then(res => res.json())
-        .then(data => {
-          const others = data.filter(p => p.owner !== currentUser);
-          setUserProducts(others);
-        });
+      refreshProducts(); // 👈 Llamas la función reutilizable
     }
   }, []);
 
@@ -210,7 +214,15 @@ export default function App() {
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {products.map(prod => (
           <div key={prod.id} className="bg-zinc-900 rounded-2xl shadow p-4 flex flex-col items-center border border-zinc-800">
-            <img src={prod.image} alt={prod.name} className="mb-4 rounded w-36 h-36 object-contain bg-zinc-800" />
+            <img
+              src={
+                prod.image?.startsWith("http")
+                  ? prod.image
+                  : `http://localhost:5000/uploads/${prod.image}`
+              }
+              alt={prod.name}
+              className="mb-4 rounded w-36 h-36 object-contain bg-zinc-800"
+            />
             <h3 className="font-bold text-zinc-100">{prod.name}</h3>
             <p className="text-sm text-zinc-400">{prod.desc}</p>
             <span className="mt-2 text-lg font-semibold text-blue-400">${prod.price}</span>

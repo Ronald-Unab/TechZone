@@ -5,7 +5,7 @@ const productSchema = new mongoose.Schema({
   desc: String,
   price: Number,
   category: String,
-  image: String, // Aquí se guardará el nombre del archivo
+  image: String,
   owner: String
 });
 
