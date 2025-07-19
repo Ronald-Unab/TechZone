@@ -26,7 +26,32 @@ router.post("/login", async (req, res) => {
     return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
   }
 
+  // Guardar sesión
+  req.session.user = { username };
+
   res.json({ username });
+});
+
+// Verificar sesión activa
+router.get("/me", (req, res) => {
+  const user = req.session.user;
+  if (!user) {
+    return res.status(401).json({ message: "No autenticado" });
+  }
+  res.json(user);
+});
+
+// Cerrar sesión
+router.post("/logout", (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      console.error("Error al cerrar sesión:", err);
+      return res.status(500).json({ message: "Error al cerrar sesión" });
+    }
+
+    res.clearCookie("connect.sid"); // Borra la cookie de sesión
+    res.sendStatus(200); // Todo ok
+  });
 });
 
 module.exports = router;

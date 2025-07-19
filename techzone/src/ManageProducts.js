@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from "react";
+import { useState } from "react";
 
-export default function ManageProducts() {
-  const [products, setProducts] = useState([]);
+export default function ManageProducts({ myProducts, refreshProducts, user }) {
   const [form, setForm] = useState({
     _id: null,
     name: "",
@@ -11,23 +10,7 @@ export default function ManageProducts() {
     image: "",
     file: null
   });
-  const [editMode, setEditMode] = useState(false);
-
-  useEffect(() => {
-    fetchProducts();
-  }, []);
-
-  const fetchProducts = async () => {
-    try {
-      const response = await fetch("http://localhost:5000/api/products");
-      const data = await response.json();
-      const currentUser = localStorage.getItem("currentUser");
-      const userProducts = data.filter(p => p.owner === currentUser); // <-- filtrar por usuario
-      setProducts(userProducts);
-    } catch (error) {
-      console.error("Error al cargar productos:", error);
-    }
-  };
+  const [editMode, setEditMode] = useState(false); // ✅ Declarado correctamente
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -46,17 +29,13 @@ export default function ManageProducts() {
     formData.append("price", form.price);
     formData.append("category", form.category);
     formData.append("image", form.file);
-    formData.append("owner", localStorage.getItem("currentUser"));
+    formData.append("owner", user); // 🔄 Sustituido localStorage por prop
 
     try {
-      console.log("🧾 Enviando datos:");
-      for (let pair of formData.entries()) {
-        console.log(pair[0], pair[1]);
-      }
-
       const response = await fetch("http://localhost:5000/api/products", {
         method: "POST",
         body: formData,
+        credentials: "include"
       });
 
       if (response.ok) {
@@ -70,7 +49,7 @@ export default function ManageProducts() {
           image: "",
           file: null
         });
-        fetchProducts();
+        refreshProducts();
       } else {
         const error = await response.json();
         console.error("❌ Error del servidor:", error);
@@ -112,6 +91,7 @@ export default function ManageProducts() {
       const response = await fetch(`http://localhost:5000/api/products/${form._id}`, {
         method: "PUT",
         body: formData,
+        credentials: "include"
       });
 
       if (response.ok) {
@@ -126,7 +106,7 @@ export default function ManageProducts() {
           file: null
         });
         setEditMode(false);
-        fetchProducts();
+        refreshProducts();
       } else {
         alert("❌ Error al actualizar producto");
       }
@@ -139,16 +119,38 @@ export default function ManageProducts() {
     try {
       const response = await fetch(`http://localhost:5000/api/products/${id}`, {
         method: "DELETE",
+        credentials: "include"
       });
 
       if (response.ok) {
         alert("🗑️ Producto eliminado");
-        fetchProducts();
+        refreshProducts();
       } else {
-        alert("+❌ No se pudo eliminar");
+        alert("❌ No se pudo eliminar");
       }
     } catch (error) {
       console.error("❌ Error al eliminar:", error);
+    }
+  };
+
+  const handleArchiveToggle = async (id, archive) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/products/archive/${id}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ archived: archive })
+      });
+
+      if (res.ok) {
+        refreshProducts();
+      } else {
+        alert("❌ No se pudo actualizar el estado del producto");
+      }
+    } catch (error) {
+      console.error("❌ Error al archivar/desarchivar producto:", error);
     }
   };
 
@@ -159,7 +161,7 @@ export default function ManageProducts() {
       {/* Formulario */}
       <div className="bg-zinc-800 p-4 rounded-lg mb-8 max-w-xl mx-auto">
         <h3 className="text-lg font-semibold mb-4">Agregar / Editar producto</h3>
-        <form onSubmit={editMode ? handleUpdate : handleSubmit} className="grid gap-3">
+        <form onSubmit={(e) => (editMode ? handleUpdate(e) : handleSubmit(e))} className="grid gap-3">
           <input
             type="text"
             name="name"
@@ -196,6 +198,16 @@ export default function ManageProducts() {
             onChange={handleChange}
             className="border p-2 rounded bg-zinc-700 text-white"
           />
+          {form.image && (
+            <div className="mb-2">
+              <p className="text-sm text-zinc-400 mb-1">Imagen actual:</p>
+              <img
+                src={`http://localhost:5000/uploads/${form.image}`}
+                alt="Imagen actual"
+                className="h-20 object-contain rounded"
+              />
+            </div>
+          )}
           <input
             type="file"
             onChange={(e) => setForm({ ...form, file: e.target.files[0] })}
@@ -212,10 +224,10 @@ export default function ManageProducts() {
 
       {/* Lista de productos */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-        {products.length === 0 ? (
+        {myProducts.length === 0 ? (
           <p className="text-center text-zinc-400 col-span-full">Aún no has agregado productos.</p>
         ) : (
-          products.map(product => (
+          myProducts.filter(p => !p.archived).map(product => (
             <div key={product._id} className="border border-zinc-700 p-4 rounded bg-zinc-800 shadow">
               <img
                 src={`http://localhost:5000/uploads/${product.image}`}
@@ -237,6 +249,12 @@ export default function ManageProducts() {
                   className="bg-red-600 text-white px-3 py-1 rounded text-sm"
                 >
                   Eliminar
+                </button>
+                <button
+                  onClick={() => handleArchiveToggle(product._id, true)}
+                  className="bg-zinc-600 text-white px-3 py-1 rounded text-sm"
+                >
+                  Archivar
                 </button>
               </div>
             </div>

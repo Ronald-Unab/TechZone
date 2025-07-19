@@ -15,7 +15,6 @@ export default function Register({ onRegister }) {
       });
 
       if (response.ok) {
-        localStorage.setItem("currentUser", username);
         onRegister(username);
       } else {
         const error = await response.json();

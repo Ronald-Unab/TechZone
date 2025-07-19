@@ -57,4 +57,40 @@ router.put("/:id", upload.single("image"), async (req, res) => {
   }
 });
 
+// PUT /api/products/archive/:id
+router.put("/archive/:id", async (req, res) => {
+  const username = req.session?.user?.username;
+  if (!username) return res.status(401).json({ error: "No autenticado" });
+
+  const { archived } = req.body;
+
+  try {
+    const product = await Product.findOneAndUpdate(
+      { _id: req.params.id, owner: username },
+      { archived },
+      { new: true }
+    );
+
+    if (!product) return res.status(404).json({ error: "Producto no encontrado" });
+
+    res.json({ message: `Producto ${archived ? "archivado" : "desarchivado"}`, product });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error al actualizar producto" });
+  }
+});
+
+// GET /api/products/archived
+router.get("/archived", async (req, res) => {
+  const username = req.session?.user?.username;
+  if (!username) return res.status(401).json({ message: "No autorizado" });
+
+  try {
+    const archived = await Product.find({ owner: username, archived: true });
+    res.json(archived);
+  } catch (error) {
+    res.status(500).json({ message: "Error al obtener productos archivados" });
+  }
+});
+
 module.exports = router;

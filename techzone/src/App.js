@@ -39,86 +39,82 @@ const featuredProducts = [
   },
 ];
 
-// Todos los productos del catálogo
-const catalogProducts = [
-  ...featuredProducts,
-  {
-    id: 5,
-    name: "Memoria RAM 16GB DDR4",
-    desc: "3200MHz, CL16",
-    price: 47.99,
-    image: "/ram.jpg",
-    category: "PC"
-  },
-  {
-    id: 6,
-    name: "Disco SSD 1TB",
-    desc: "NVMe Gen3, 3500MB/s",
-    price: 59.99,
-    image: "/ssd.jpg",
-    category: "PC"
-  },
-  {
-    id: 7,
-    name: "Tarjeta de Video GTX 1660",
-    desc: "6GB GDDR5",
-    price: 210.99,
-    image: "/gpu.jpg",
-    category: "PC"
-  },
-  {
-    id: 8,
-    name: "Procesador Ryzen 5 5600G",
-    desc: "6 núcleos, 12 hilos",
-    price: 154.99,
-    image: "/cpu.jpg",
-    category: "PC"
-  },
-  {
-    id: 9,
-    name: "Fuente 650W 80+ Bronze",
-    desc: "Alta eficiencia, silenciosa",
-    price: 39.99,
-    image: "/psu.jpg",
-    category: "PC"
-  },
-  {
-    id: 10,
-    name: "Gabinete RGB",
-    desc: "Ventiladores incluidos, lateral vidrio",
-    price: 64.99,
-    image: "/case.jpg",
-    category: "PC"
-  }
-];
-
 export default function App() {
 
   const [message, setMessage] = useState("");
-  const [user, setUser] = useState(localStorage.getItem("currentUser"));
+  const [user, setUser] = useState(null);
   const [view, setView] = useState(user ? "home" : "login");
   const [cart, setCart] = useState([]);
-  const [userProducts, setUserProducts] = useState([]);
+  const [userProducts, setUserProducts] = useState([]); // productos de otros usuarios (para el catálogo)
+  const [myProducts, setMyProducts] = useState([]);     // productos propios (para "Administrar")
+  const [history, setHistory] = useState([]);
+  const [archived, setArchived] = useState([]);
+  const [archivedProducts, setArchivedProducts] = useState([]);
+
+
 
   const refreshProducts = async () => {
-    const currentUser = localStorage.getItem("currentUser");
+    if (!user) return;
     const res = await fetch("http://localhost:5000/api/products");
     const data = await res.json();
-    const mine = data.filter(p => p.owner === currentUser);
-    const others = data.filter(p => p.owner !== currentUser);
-    localStorage.setItem("myProducts", JSON.stringify(mine));
-    setUserProducts(others);
+    const mine = data.filter(p => p.owner === user);
+    const others = data.filter(p => p.owner !== user);
+    setMyProducts(mine);         // se usarán en "Administrar"
+    setUserProducts(others);     // se mostrarán en el catálogo
   };
 
   useEffect(() => {
-    const currentUser = localStorage.getItem('currentUser');
-    if (currentUser) {
-      setUser(currentUser);
-      const savedCart = JSON.parse(localStorage.getItem(`cart_${currentUser}`)) || [];
-      setCart(savedCart);
-      refreshProducts(); // 👈 Llamas la función reutilizable
-    }
-  }, []);
+    // Verificar si hay sesión activa
+    fetch("http://localhost:5000/api/users/me", {
+      credentials: "include"
+    })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && data.username) {
+          setUser(data.username);
+          setView("home");
+
+          // 👇 Cargar productos una vez autenticado
+          refreshProducts();
+
+          // 👇 Cargar carrito
+          fetch("http://localhost:5000/api/cart", {
+            credentials: "include"
+          })
+            .then(res => res.json())
+            .then(data => {
+              if (data && data.items) {
+                setCart(data.items.map(item => ({
+                  product: item.product,
+                  quantity: item.quantity
+                })));
+              }
+            });
+
+          fetch("http://localhost:5000/api/history", {
+            credentials: "include"
+          })
+            .then(res => res.json())
+            .then(data => setHistory(data));
+
+          fetch("http://localhost:5000/api/history", { credentials: "include" })
+            .then(res => res.json())
+            .then(data => setHistory(data));
+
+          fetch("http://localhost:5000/api/history/archived", { credentials: "include" })
+            .then(res => res.json())
+            .then(data => setArchived(data));
+
+          fetch("http://localhost:5000/api/products/archived", { credentials: "include" })
+            .then(res => res.json())
+            .then(data => setArchivedProducts(data));
+
+        } else {
+          setUser(null);
+          setView("login");
+        }
+      });
+  }, [user]);
 
   // Navegación
   function handleNav(section) {
@@ -132,12 +128,12 @@ export default function App() {
 
   // Añadir al carrito
   function handleAddToCart(product) {
-    const existing = cart.find(item => item.product.id === product.id);
+    const existing = cart.find(item => item.product._id === product._id);
 
     let updatedCart;
     if (existing) {
       updatedCart = cart.map(item => {
-        if (item.product.id === product.id) {
+        if (item.product._id === product._id) {
           return { ...item, quantity: item.quantity + 1 };
         }
         return item;
@@ -148,9 +144,18 @@ export default function App() {
 
     setCart(updatedCart);
 
-    if (user) {
-      localStorage.setItem(`cart_${user}`, JSON.stringify(updatedCart));
-    }
+    // 🔁 Guardar en la base de datos
+    fetch("http://localhost:5000/api/cart", {
+      credentials: "include",
+      method: "POST", // o GET, POST según el caso
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: updatedCart.map(item => ({
+          product: item.product._id,   // ✅ solo el ID
+          quantity: item.quantity
+        }))
+      })
+    });
 
     setMessage(`Producto "${product.name}" agregado al carrito.`);
     setTimeout(() => setMessage(""), 1800);
@@ -158,54 +163,179 @@ export default function App() {
 
   // Quitar del carrito
   function handleRemoveFromCart(id) {
-    setCart(prev => {
-      const updated = prev.filter(item => item.product.id !== id);
-      if (user) {
-        localStorage.setItem(`cart_${user}`, JSON.stringify(updated));
-      }
-      return updated;
+    const updated = cart.filter(item => item.product._id !== id);
+    setCart(updated);
+
+    fetch("http://localhost:5000/api/cart", {
+      method: "PUT",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        items: updated.map(item => ({
+          product: item.product._id,
+          quantity: item.quantity
+        }))
+      })
+    }).then(() => {
+      fetch("http://localhost:5000/api/cart", {
+        credentials: "include"
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.items) {
+            setCart(
+              data.items.map(item => ({
+                product: item.product,
+                quantity: item.quantity
+              }))
+            );
+          }
+        });
     });
   }
 
   // Cambiar cantidad en carrito
   function handleChangeQty(id, delta) {
-    setCart(prev => {
-      const updated = prev.map(item => {
-        if (item.product.id === id) {
-          const qty = Math.max(1, item.quantity + delta);
-          return { ...item, quantity: qty };
-        }
-        return item;
-      });
-      if (user) {
-        localStorage.setItem(`cart_${user}`, JSON.stringify(updated));
+    const updated = cart.map(item => {
+      if (item.product._id === id) {
+        const qty = Math.max(1, item.quantity + delta);
+        return { ...item, quantity: qty };
       }
-      return updated;
+      return item;
+    });
+
+    setCart(updated);
+
+    fetch("http://localhost:5000/api/cart", {
+      method: "PUT",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        items: updated.map(item => ({
+          product: item.product._id,
+          quantity: item.quantity
+        }))
+      })
     });
   }
+
+  const handleArchive = async (id) => {
+    const res = await fetch(`http://localhost:5000/api/history/archive/${id}`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ archived: true }),
+    });
+    if (res.ok) {
+      const updated = history.find(h => h._id === id);
+      setHistory(history.filter(h => h._id !== id));
+      setArchived([...archived, { ...updated, archived: true }]);
+    }
+  };
+
+  const handleUnarchive = async (id) => {
+    const res = await fetch(`http://localhost:5000/api/history/archive/${id}`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ archived: false }),
+    });
+    if (res.ok) {
+      const updated = archived.find(h => h._id === id);
+      setArchived(archived.filter(h => h._id !== id));
+      setHistory([...history, { ...updated, archived: false }]);
+    }
+  };
+
+  const handleUnarchiveProduct = async (id) => {
+    const res = await fetch(`http://localhost:5000/api/products/archive/${id}`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ archived: false })
+    });
+
+    if (res.ok) {
+      setArchivedProducts(archivedProducts.filter(p => p._id !== id));
+      refreshProducts();
+    }
+  };
 
   // Total carrito
   function cartTotal() {
     return cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0).toFixed(2);
   }
 
-  function handleCheckout() {
+  async function handleCheckout() {
     if (cart.length === 0) {
       alert("Tu carrito está vacío.");
       return;
     }
 
-    const currentUser = localStorage.getItem("currentUser");
-    const historyKey = `history_${currentUser}`;
+    try {
+      // Guardar historial
+      const res = await fetch("http://localhost:5000/api/history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          items: cart.map(item => ({
+            productId: item.product._id,
+            name: item.product.name,
+            image: item.product.image,
+            price: item.product.price,
+            quantity: item.quantity
+          }))
+        })
+      });
 
-    const previous = JSON.parse(localStorage.getItem(historyKey)) || [];
-    const newHistory = [...previous, { id: Date.now(), items: cart }];
+      if (!res.ok) {
+        throw new Error("Error al guardar el historial de compras");
+      }
 
-    localStorage.setItem(historyKey, JSON.stringify(newHistory));
-    localStorage.setItem(`cart_${currentUser}`, JSON.stringify([]));
-    setCart([]);
-    setMessage("¡Compra finalizada!");
-    setTimeout(() => setMessage(""), 1800);
+      // Vaciar carrito en el backend
+      const clearRes = await fetch("http://localhost:5000/api/cart", {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ items: [] })
+      });
+
+      if (!clearRes.ok) {
+        throw new Error("Error al vaciar el carrito en el servidor");
+      }
+
+      // Recargar carrito desde MongoDB (ya vacío)
+      const cartRes = await fetch("http://localhost:5000/api/cart", {
+        credentials: "include"
+      });
+
+      const cartData = await cartRes.json();
+
+      if (cartData && cartData.items) {
+        setCart(
+          cartData.items.map(item => ({
+            product: item.product,
+            quantity: item.quantity
+          }))
+        );
+      } else {
+        setCart([]); // por si no hay nada
+      }
+
+      setMessage("¡Compra finalizada!");
+      setTimeout(() => setMessage(""), 1800);
+
+    } catch (error) {
+      console.error("Error al finalizar la compra:", error);
+      alert("Ocurrió un error al finalizar la compra.");
+    }
   }
 
   // Componente productos
@@ -213,7 +343,7 @@ export default function App() {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {products.map(prod => (
-          <div key={prod.id} className="bg-zinc-900 rounded-2xl shadow p-4 flex flex-col items-center border border-zinc-800">
+          <div key={prod._id || prod.id} className="bg-zinc-900 rounded-2xl shadow p-4 flex flex-col items-center border border-zinc-800">
             <img
               src={
                 prod.image?.startsWith("http")
@@ -267,9 +397,17 @@ export default function App() {
       <div className="max-w-xl mx-auto">
         <ul>
           {cart.map(item => (
-            <li key={item.product.id} className="flex items-center justify-between bg-zinc-900 rounded-2xl shadow p-3 mb-4 border border-zinc-800">
+            <li key={item.product._id || item.product.id} className="flex items-center justify-between bg-zinc-900 rounded-2xl shadow p-3 mb-4 border border-zinc-800">
               <div className="flex items-center gap-3">
-                <img src={item.product.image} alt={item.product.name} className="w-14 h-14 rounded object-contain bg-zinc-800" />
+                <img
+                  src={
+                    item.product.image?.startsWith("http")
+                      ? item.product.image
+                      : `http://localhost:5000/uploads/${item.product.image}`
+                  }
+                  alt={item.product.name}
+                  className="w-14 h-14 rounded object-contain bg-zinc-800"
+                />
                 <div>
                   <div className="font-bold text-zinc-100">{item.product.name}</div>
                   <div className="text-sm text-zinc-400">{item.product.desc}</div>
@@ -278,13 +416,13 @@ export default function App() {
               </div>
               <div className="flex flex-col items-end">
                 <div className="flex items-center gap-2 mb-1">
-                  <button onClick={() => handleChangeQty(item.product.id, -1)}
+                  <button onClick={() => handleChangeQty(item.product._id, -1)}
                     className="px-2 py-1 bg-zinc-800 text-zinc-100 rounded font-bold">-</button>
                   <span className="px-2 text-zinc-200">{item.quantity}</span>
-                  <button onClick={() => handleChangeQty(item.product.id, 1)}
+                  <button onClick={() => handleChangeQty(item.product._id, 1)}
                     className="px-2 py-1 bg-zinc-800 text-zinc-100 rounded font-bold">+</button>
                 </div>
-                <button onClick={() => handleRemoveFromCart(item.product.id)}
+                <button onClick={() => handleRemoveFromCart(item.product._id)}
                   className="text-xs text-red-400 hover:underline">Eliminar</button>
               </div>
             </li>
@@ -302,35 +440,50 @@ export default function App() {
   }
 
   function PurchaseHistory() {
-    const currentUser = localStorage.getItem("currentUser");
-    const [history, setHistory] = useState([]);
 
-    useEffect(() => {
-      const saved = JSON.parse(localStorage.getItem(`history_${currentUser}`)) || [];
-      setHistory(saved);
-    }, [currentUser]);
-
-    const handleReAddToCart = (items) => {
+    const handleReAddToCart = async (items) => {
       const updated = [...cart];
-      items.forEach(({ product, quantity }) => {
-        const existing = updated.find(item => item.product.id === product.id);
-        if (existing) {
-          existing.quantity += quantity;
-        } else {
-          updated.push({ product, quantity });
-        }
-      });
-      setCart(updated);
-      localStorage.setItem(`cart_${currentUser}`, JSON.stringify(updated));
-      setMessage("Productos agregados desde el historial");
-      setTimeout(() => setMessage(""), 1800);
-    };
 
-    const handleClearHistory = () => {
-      if (window.confirm("¿Seguro que quieres borrar tu historial de compras?")) {
-        localStorage.removeItem(`history_${currentUser}`);
-        setHistory([]);
+      for (const { productId, name, price, image, quantity } of items) {
+        try {
+          const res = await fetch(`http://localhost:5000/api/products/${productId}`);
+          if (!res.ok) {
+            alert(`El producto "${name}" ya no está disponible y no se agregó al carrito.`);
+            continue;
+          }
+
+          const existing = updated.find(item => item.product._id === productId);
+          if (existing) {
+            existing.quantity += quantity;
+          } else {
+            updated.push({
+              product: { _id: productId, name, price, image },
+              quantity
+            });
+          }
+        } catch (error) {
+          console.error("Error verificando producto:", error);
+          alert(`Ocurrió un error con el producto "${name}"`);
+        }
       }
+
+      setCart(updated);
+
+      // Guardar en MongoDB
+      fetch("http://localhost:5000/api/cart", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: updated.map(item => ({
+            product: item.product._id,
+            quantity: item.quantity
+          }))
+        })
+      });
+
+      setMessage("Productos disponibles agregados al carrito.");
+      setTimeout(() => setMessage(""), 1800);
     };
 
     return (
@@ -341,33 +494,177 @@ export default function App() {
         ) : (
           <>
             <ul className="space-y-6">
-              {history.map(order => (
-                <li key={order.id} className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
-                  <h4 className="font-semibold text-lg mb-2">Compra #{order.id}</h4>
-                  <ul className="space-y-1">
-                    {order.items.map(item => (
-                      <li key={item.product.id}>
-                        {item.quantity}× {item.product.name} (${item.product.price})
-                      </li>
-                    ))}
-                  </ul>
+              {history.map((order, index) => {
+                const total = order.items.reduce(
+                  (sum, item) => sum + item.price * item.quantity,
+                  0
+                );
+
+                return (
+                  <li key={order._id} className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
+                    <h4 className="font-semibold text-lg mb-4">
+                      Compra #{order.orderNumber}{" "}
+                      <span className="text-sm text-zinc-400">
+                        ({new Date(order.createdAt).toLocaleString()})
+                      </span>
+                    </h4>
+                    <table className="w-full text-sm text-zinc-300 mb-3">
+                      <thead className="border-b border-zinc-700 text-left">
+                        <tr>
+                          <th>Producto</th>
+                          <th>Cant.</th>
+                          <th>Unitario</th>
+                          <th>Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {order.items.map((item, i) => (
+                          <tr key={i}>
+                            <td className="py-2 pr-4 flex items-center gap-3">
+                              <img
+                                src={
+                                  item.image?.startsWith("http")
+                                    ? item.image
+                                    : `http://localhost:5000/uploads/${item.image}`
+                                }
+                                alt={item.name}
+                                className="w-10 h-10 object-contain rounded bg-zinc-800"
+                              />
+                              {item.name}
+                            </td>
+                            <td className="py-2 pr-4">{item.quantity}</td>
+                            <td className="py-2 pr-4">${item.price.toFixed(2)}</td>
+                            <td className="py-2">${(item.quantity * item.price).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="text-right text-lg font-semibold text-green-400">
+                      Total: ${total.toFixed(2)}
+                    </div>
+                    <button
+                      onClick={() => handleReAddToCart(order.items)}
+                      className="mt-3 bg-blue-600 px-3 py-1 text-sm rounded text-white"
+                    >
+                      Volver a agregar al carrito
+                    </button>
+                    <li key={order._id}>
+                      <button
+                        onClick={() => handleArchive(order._id)}
+                        className="mt-2 bg-zinc-700 text-white px-3 py-1 text-sm rounded hover:bg-zinc-600 ml-2"
+                      >
+                        Archivar
+                      </button>
+                    </li>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  function ArchivedHistory() {
+    return (
+      <div className="max-w-3xl mx-auto text-zinc-200 space-y-12">
+        {/* Productos archivados */}
+        <div>
+          <h2 className="text-xl font-bold mb-4">Productos archivados</h2>
+          {archivedProducts.length === 0 ? (
+            <p className="text-zinc-400">No tienes productos archivados.</p>
+          ) : (
+            <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+              {archivedProducts.map(product => (
+                <li key={product._id} className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
+                  <img
+                    src={`http://localhost:5000/uploads/${product.image}`}
+                    alt={product.name}
+                    className="w-full h-32 object-contain rounded bg-zinc-800 mb-3"
+                  />
+                  <h4 className="font-semibold text-lg">{product.name}</h4>
+                  <p className="text-sm text-zinc-400">{product.desc}</p>
+                  <div className="text-green-400 font-semibold mt-2">${product.price}</div>
                   <button
-                    onClick={() => handleReAddToCart(order.items)}
-                    className="mt-3 bg-blue-600 px-3 py-1 text-sm rounded text-white"
+                    onClick={() => handleUnarchiveProduct(product._id)}
+                    className="mt-3 bg-blue-600 text-white px-3 py-1 text-sm rounded"
                   >
-                    Volver a agregar al carrito
+                    Desarchivar
                   </button>
                 </li>
               ))}
             </ul>
-            <button
-              onClick={handleClearHistory}
-              className="mt-6 bg-red-600 px-4 py-2 rounded text-white hover:bg-red-700"
-            >
-              Borrar historial
-            </button>
-          </>
-        )}
+          )}
+        </div>
+
+        {/* Pedidos archivados */}
+        <div>
+          <h2 className="text-xl font-bold mb-4">Pedidos archivados</h2>
+          {archived.length === 0 ? (
+            <p className="text-zinc-400">No hay pedidos archivados.</p>
+          ) : (
+            <ul className="space-y-6">
+              {archived.map((order, index) => {
+                const total = order.items.reduce(
+                  (sum, item) => sum + item.price * item.quantity,
+                  0
+                );
+
+                return (
+                  <li key={order._id} className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
+                    <h4 className="font-semibold text-lg mb-4">
+                      Compra #{order.orderNumber}{" "}
+                      <span className="text-sm text-zinc-400">
+                        ({new Date(order.createdAt).toLocaleString()})
+                      </span>
+                    </h4>
+                    <table className="w-full text-sm text-zinc-300 mb-3">
+                      <thead className="border-b border-zinc-700 text-left">
+                        <tr>
+                          <th>Producto</th>
+                          <th>Cant.</th>
+                          <th>Unitario</th>
+                          <th>Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {order.items.map((item, i) => (
+                          <tr key={i}>
+                            <td className="py-2 pr-4 flex items-center gap-3">
+                              <img
+                                src={
+                                  item.image?.startsWith("http")
+                                    ? item.image
+                                    : `http://localhost:5000/uploads/${item.image}`
+                                }
+                                alt={item.name}
+                                className="w-10 h-10 object-contain rounded bg-zinc-800"
+                              />
+                              {item.name}
+                            </td>
+                            <td className="py-2 pr-4">{item.quantity}</td>
+                            <td className="py-2 pr-4">${item.price.toFixed(2)}</td>
+                            <td className="py-2">${(item.quantity * item.price).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="text-right text-lg font-semibold text-green-400">
+                      Total: ${total.toFixed(2)}
+                    </div>
+                    <button
+                      onClick={() => handleUnarchive(order._id)}
+                      className="mt-2 bg-blue-600 px-3 py-1 text-sm rounded text-white"
+                    >
+                      Desarchivar
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </div>
     );
   }
@@ -390,7 +687,6 @@ export default function App() {
         <button
           onClick={() => {
             setCart([]);
-            localStorage.setItem(`cart_${user}`, JSON.stringify([]));
             setMessage("¡Gracias por tu compra!");
             setView("home");
           }}
@@ -438,12 +734,26 @@ export default function App() {
                     </button>
                   </li>
                   <li>
+                    <button onClick={() => handleNav("archived")}
+                      className={`hover:underline ${view === "archived" ? "font-bold underline" : ""}`}>
+                      Archivados
+                    </button>
+                  </li>
+                  <li>
                     <button
-                      onClick={() => {
-                        localStorage.removeItem("currentUser");
-                        setUser(null);
-                        setCart([]);
-                        setView("login");
+                      onClick={async () => {
+                        try {
+                          await fetch("http://localhost:5000/api/users/logout", {
+                            method: "POST",
+                            credentials: "include",
+                          });
+
+                          setUser(null);
+                          setCart([]);
+                          setView("login");
+                        } catch (error) {
+                          console.error("Error al cerrar sesión:", error);
+                        }
                       }}
                       className="bg-red-500 text-white px-3 py-1 rounded-lg text-sm"
                     >
@@ -506,7 +816,7 @@ export default function App() {
                 {user ? (
                   <>
                     <h2 className="text-xl font-semibold mb-2 text-zinc-200">Catálogo completo</h2>
-                    <GroupedCatalog products={[...catalogProducts, ...userProducts]} />
+                    <GroupedCatalog products={userProducts} />
                   </>
                 ) : (
                   <p className="text-red-500">Debes iniciar sesión para ver el catálogo.</p>
@@ -535,10 +845,15 @@ export default function App() {
                 <PurchaseHistory />
               </section>
             )}
+            {view === "archived" && (
+              <section>
+                <ArchivedHistory />
+              </section>
+            )}
             {view === "manage" && (
               <section>
                 {user ? (
-                  <ManageProducts />
+                  <ManageProducts myProducts={myProducts} refreshProducts={refreshProducts} user={user} />
                 ) : (
                   <p className="text-red-500">Debes iniciar sesión para acceder a esta sección.</p>
                 )}

@@ -11,11 +11,11 @@ export default function Login({ onLogin }) {
       const response = await fetch("http://localhost:5000/api/users/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password }),
+        credentials: "include"
       });
 
       if (response.ok) {
-        localStorage.setItem("currentUser", username);
         onLogin(username);
       } else {
         const error = await response.json();

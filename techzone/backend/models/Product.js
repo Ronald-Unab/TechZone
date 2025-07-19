@@ -6,7 +6,8 @@ const productSchema = new mongoose.Schema({
   price: Number,
   category: String,
   image: String,
-  owner: String
+  owner: String,
+  archived: { type: Boolean, default: false }
 });
 
 module.exports = mongoose.model("Product", productSchema);
