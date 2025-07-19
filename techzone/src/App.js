@@ -50,8 +50,7 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [archived, setArchived] = useState([]);
   const [archivedProducts, setArchivedProducts] = useState([]);
-
-
+  const [productStockMap, setProductStockMap] = useState({});
 
   const refreshProducts = async () => {
     if (!user) return;
@@ -59,6 +58,11 @@ export default function App() {
     const data = await res.json();
     const mine = data.filter(p => p.owner === user);
     const others = data.filter(p => p.owner !== user);
+    const stockMap = {};
+    data.forEach(p => {
+      stockMap[p._id] = p.stock;
+    });
+    setProductStockMap(stockMap);
     setMyProducts(mine);         // se usarán en "Administrar"
     setUserProducts(others);     // se mostrarán en el catálogo
   };
@@ -128,43 +132,67 @@ export default function App() {
 
   // Añadir al carrito
   function handleAddToCart(product) {
-    const existing = cart.find(item => item.product._id === product._id);
+  const currentQtyInCart = cart.find(item => item.product._id === product._id)?.quantity || 0;
+  const available = productStockMap[product._id] ?? product.stock ?? 0;
 
-    let updatedCart;
-    if (existing) {
-      updatedCart = cart.map(item => {
-        if (item.product._id === product._id) {
-          return { ...item, quantity: item.quantity + 1 };
-        }
-        return item;
-      });
-    } else {
-      updatedCart = [...cart, { product, quantity: 1 }];
-    }
-
-    setCart(updatedCart);
-
-    // 🔁 Guardar en la base de datos
-    fetch("http://localhost:5000/api/cart", {
-      credentials: "include",
-      method: "POST", // o GET, POST según el caso
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        items: updatedCart.map(item => ({
-          product: item.product._id,   // ✅ solo el ID
-          quantity: item.quantity
-        }))
-      })
-    });
-
-    setMessage(`Producto "${product.name}" agregado al carrito.`);
-    setTimeout(() => setMessage(""), 1800);
+  // Validar si el producto ya no tiene stock desde el catálogo
+  if (available === 0) {
+    alert(`"${product.name}" ya no está disponible.`);
+    return;
   }
+
+  // Validar si ya se agregó la cantidad máxima permitida
+  if (currentQtyInCart >= available) {
+    alert(`Ya has agregado la cantidad máxima disponible de "${product.name}".`);
+    return;
+  }
+
+  const updatedCart = [...cart];
+  const index = updatedCart.findIndex(item => item.product._id === product._id);
+
+  if (index !== -1) {
+    updatedCart[index].quantity += 1;
+  } else {
+    updatedCart.push({ product, quantity: 1 });
+  }
+
+  setCart(updatedCart);
+
+  // Actualizar stock local
+  setProductStockMap(prev => ({
+    ...prev,
+    [product._id]: available - 1
+  }));
+
+  // Guardar en backend
+  fetch("http://localhost:5000/api/cart", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      items: updatedCart.map(item => ({
+        product: item.product._id,
+        quantity: item.quantity
+      }))
+    })
+  });
+
+  setMessage(`Producto "${product.name}" agregado al carrito.`);
+  setTimeout(() => setMessage(""), 1800);
+}
 
   // Quitar del carrito
   function handleRemoveFromCart(id) {
+    const removedItem = cart.find(item => item.product._id === id);
     const updated = cart.filter(item => item.product._id !== id);
     setCart(updated);
+
+    if (removedItem) {
+      setProductStockMap(prev => ({
+        ...prev,
+        [id]: (prev[id] || 0) + removedItem.quantity
+      }));
+    }
 
     fetch("http://localhost:5000/api/cart", {
       method: "PUT",
@@ -200,14 +228,16 @@ export default function App() {
   function handleChangeQty(id, delta) {
     const updated = cart.map(item => {
       if (item.product._id === id) {
-        const qty = Math.max(1, item.quantity + delta);
-        return { ...item, quantity: qty };
+        const max = item.product.stock || 1; // Evitar pasar el stock
+        const newQty = Math.max(1, Math.min(item.quantity + delta, max));
+        return { ...item, quantity: newQty };
       }
       return item;
     });
 
     setCart(updated);
 
+    // Guardar cambios en MongoDB
     fetch("http://localhost:5000/api/cart", {
       method: "PUT",
       credentials: "include",
@@ -355,6 +385,7 @@ export default function App() {
             />
             <h3 className="font-bold text-zinc-100">{prod.name}</h3>
             <p className="text-sm text-zinc-400">{prod.desc}</p>
+            <p className="text-sm text-green-400">Disponible: {prod.stock ?? 0}</p>
             <span className="mt-2 text-lg font-semibold text-blue-400">${prod.price}</span>
             <button className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition"
               onClick={() => handleAddToCart(prod)}>
@@ -448,7 +479,15 @@ export default function App() {
         try {
           const res = await fetch(`http://localhost:5000/api/products/${productId}`);
           if (!res.ok) {
-            alert(`El producto "${name}" ya no está disponible y no se agregó al carrito.`);
+            alert(`El producto "${name}" ya no está disponible.`);
+            continue;
+          }
+
+          const product = await res.json();
+          const available = productStockMap[productId] || product.stock;
+
+          if (available < quantity) {
+            alert(`Ya no hay suficiente stock para "${name}".`);
             continue;
           }
 
@@ -461,6 +500,13 @@ export default function App() {
               quantity
             });
           }
+
+          // Descontar stock local
+          setProductStockMap(prev => ({
+            ...prev,
+            [productId]: prev[productId] - quantity
+          }));
+
         } catch (error) {
           console.error("Error verificando producto:", error);
           alert(`Ocurrió un error con el producto "${name}"`);
@@ -469,7 +515,7 @@ export default function App() {
 
       setCart(updated);
 
-      // Guardar en MongoDB
+      // Guardar en backend
       fetch("http://localhost:5000/api/cart", {
         method: "PUT",
         credentials: "include",

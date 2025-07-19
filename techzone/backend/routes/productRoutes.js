@@ -14,10 +14,31 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-router.post("/", upload.single("image"), addProduct);
+router.post("/", upload.single("image"), async (req, res) => {
+  try {
+    const { name, desc, price, category, owner } = req.body;
+    const image = req.file ? req.file.filename : null;
+
+    const product = new Product({
+      name,
+      desc,
+      price,
+      category,
+      image,
+      owner,
+      stock: parseInt(req.body.stock) // ✅ Asignar stock
+    });
+
+    await product.save();
+    res.status(201).json(product);
+  } catch (err) {
+    console.error("Error al crear producto:", err);
+    res.status(500).json({ message: "Error al crear producto" });
+  }
+});
+
 router.get("/", getProducts);
 
-// En routes/productRoutes.js
 router.delete("/:id", async (req, res) => {
   const { id } = req.params;
   try {
@@ -39,6 +60,7 @@ router.put("/:id", upload.single("image"), async (req, res) => {
       desc,
       price,
       category,
+      stock: parseInt(req.body.stock) || undefined // ✅ stock opcional
     };
 
     if (image) {
@@ -57,7 +79,6 @@ router.put("/:id", upload.single("image"), async (req, res) => {
   }
 });
 
-// PUT /api/products/archive/:id
 router.put("/archive/:id", async (req, res) => {
   const username = req.session?.user?.username;
   if (!username) return res.status(401).json({ error: "No autenticado" });
@@ -80,7 +101,6 @@ router.put("/archive/:id", async (req, res) => {
   }
 });
 
-// GET /api/products/archived
 router.get("/archived", async (req, res) => {
   const username = req.session?.user?.username;
   if (!username) return res.status(401).json({ message: "No autorizado" });

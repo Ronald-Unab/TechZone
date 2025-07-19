@@ -1,12 +1,20 @@
 const Product = require("../models/Product");
 
 exports.addProduct = async (req, res) => {
-    
   try {
-    const { name, desc, price, category, owner } = req.body;
+    const { name, desc, price, category, owner, stock } = req.body;
     const image = req.file ? req.file.filename : null;
 
-    const newProduct = new Product({ name, desc, price, category, image, owner });
+    const newProduct = new Product({
+      name,
+      desc,
+      price,
+      category,
+      image,
+      owner,
+      stock: parseInt(stock)  // ✅ Guardar el stock como número
+    });
+
     await newProduct.save();
 
     res.status(201).json(newProduct);

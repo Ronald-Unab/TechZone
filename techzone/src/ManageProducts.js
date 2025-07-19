@@ -7,6 +7,7 @@ export default function ManageProducts({ myProducts, refreshProducts, user }) {
     desc: "",
     price: "",
     category: "",
+    stock: "",
     image: "",
     file: null
   });
@@ -28,6 +29,7 @@ export default function ManageProducts({ myProducts, refreshProducts, user }) {
     formData.append("desc", form.desc);
     formData.append("price", form.price);
     formData.append("category", form.category);
+    formData.append("stock", form.stock);
     formData.append("image", form.file);
     formData.append("owner", user); // 🔄 Sustituido localStorage por prop
 
@@ -46,6 +48,7 @@ export default function ManageProducts({ myProducts, refreshProducts, user }) {
           desc: "",
           price: "",
           category: "",
+          stock: "",
           image: "",
           file: null
         });
@@ -67,6 +70,7 @@ export default function ManageProducts({ myProducts, refreshProducts, user }) {
       desc: product.desc,
       price: product.price,
       category: product.category,
+      stock: product.stock,
       image: product.image,
       file: null
     });
@@ -83,6 +87,7 @@ export default function ManageProducts({ myProducts, refreshProducts, user }) {
     formData.append("desc", form.desc);
     formData.append("price", form.price);
     formData.append("category", form.category);
+    formData.append("stock", form.stock);
     if (form.file) {
       formData.append("image", form.file);
     }
@@ -102,6 +107,7 @@ export default function ManageProducts({ myProducts, refreshProducts, user }) {
           desc: "",
           price: "",
           category: "",
+          stock: "",
           image: "",
           file: null
         });
@@ -195,6 +201,14 @@ export default function ManageProducts({ myProducts, refreshProducts, user }) {
             name="price"
             placeholder="Precio"
             value={form.price}
+            onChange={handleChange}
+            className="border p-2 rounded bg-zinc-700 text-white"
+          />
+          <input
+            type="number"
+            name="stock"
+            placeholder="Cantidad disponible"
+            value={form.stock}
             onChange={handleChange}
             className="border p-2 rounded bg-zinc-700 text-white"
           />
