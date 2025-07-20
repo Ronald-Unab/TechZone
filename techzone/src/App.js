@@ -3,42 +3,6 @@ import Register from "./Register";
 import Login from "./Login";
 import ManageProducts from "./ManageProducts";
 
-// Productos destacados para la Home
-const featuredProducts = [
-  {
-    id: 1,
-    name: "Mouse Gamer",
-    desc: "Sensor óptico, RGB, 12000 DPI",
-    price: 24.99,
-    image: "/mouse.jpg",
-    category: "PC"
-  },
-  {
-    id: 2,
-    name: "Teclado Mecánico",
-    desc: "Switch azul, retroiluminado",
-    price: 39.99,
-    image: "/teclado.jpg",
-    category: "PC"
-  },
-  {
-    id: 3,
-    name: "Headset Gamer",
-    desc: "Sonido envolvente, micrófono",
-    price: 29.99,
-    image: "/headset.jpg",
-    category: "Accesorios"
-  },
-  {
-    id: 4,
-    name: "Monitor 24\" FHD",
-    desc: "IPS, 75Hz, HDMI",
-    price: 109.99,
-    image: "/monitor.jpg",
-    category: "PC"
-  },
-];
-
 export default function App() {
 
   const [message, setMessage] = useState("");
@@ -51,6 +15,8 @@ export default function App() {
   const [archived, setArchived] = useState([]);
   const [archivedProducts, setArchivedProducts] = useState([]);
   const [productStockMap, setProductStockMap] = useState({});
+  const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const refreshProducts = async () => {
     if (!user) return;
@@ -58,6 +24,7 @@ export default function App() {
     const data = await res.json();
     const mine = data.filter(p => p.owner === user);
     const others = data.filter(p => p.owner !== user);
+    const archivedMine = data.filter(p => p.owner === user && p.archived);
     const stockMap = {};
     data.forEach(p => {
       stockMap[p._id] = p.stock;
@@ -65,26 +32,24 @@ export default function App() {
     setProductStockMap(stockMap);
     setMyProducts(mine);         // se usarán en "Administrar"
     setUserProducts(others);     // se mostrarán en el catálogo
+    setArchivedProducts(archivedMine);
   };
 
   useEffect(() => {
     // Verificar si hay sesión activa
-    fetch("http://localhost:5000/api/users/me", {
-      credentials: "include"
-    })
+    fetch("http://localhost:5000/api/users/me", { credentials: "include" })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data && data.username) {
           setUser(data.username);
-          setView("home");
+          const lastView = localStorage.getItem("lastView") || "home";
+          setView(lastView);
 
           // 👇 Cargar productos una vez autenticado
           refreshProducts();
 
           // 👇 Cargar carrito
-          fetch("http://localhost:5000/api/cart", {
-            credentials: "include"
-          })
+          fetch("http://localhost:5000/api/cart", { credentials: "include" })
             .then(res => res.json())
             .then(data => {
               if (data && data.items) {
@@ -113,10 +78,20 @@ export default function App() {
             .then(res => res.json())
             .then(data => setArchivedProducts(data));
 
+          fetch("http://localhost:5000/api/products/top-sold", { credentials: "include" })
+            .then(res => res.json())
+            .then(data => {
+              // Filtrar los productos que no son del usuario autenticado
+              const filtered = data.filter(p => p.owner !== data.username && p.owner !== user);
+              setFeaturedProducts(filtered);
+            })
+            .catch(err => console.error("Error cargando productos destacados:", err));
+
         } else {
           setUser(null);
           setView("login");
         }
+        setLoading(false);
       });
   }, [user]);
 
@@ -126,60 +101,61 @@ export default function App() {
       setView("login");
     } else {
       setView(section);
+      localStorage.setItem("lastView", section);
     }
     setMessage("");
   }
 
   // Añadir al carrito
   function handleAddToCart(product) {
-  const currentQtyInCart = cart.find(item => item.product._id === product._id)?.quantity || 0;
-  const available = productStockMap[product._id] ?? product.stock ?? 0;
+    const currentQtyInCart = cart.find(item => item.product._id === product._id)?.quantity || 0;
+    const available = productStockMap[product._id] ?? product.stock ?? 0;
 
-  // Validar si el producto ya no tiene stock desde el catálogo
-  if (available === 0) {
-    alert(`"${product.name}" ya no está disponible.`);
-    return;
+    // Validar si el producto ya no tiene stock desde el catálogo
+    if (available === 0) {
+      alert(`"${product.name}" ya no está disponible.`);
+      return;
+    }
+
+    // Validar si ya se agregó la cantidad máxima permitida
+    if (currentQtyInCart >= available) {
+      alert(`Ya has agregado la cantidad máxima disponible de "${product.name}".`);
+      return;
+    }
+
+    const updatedCart = [...cart];
+    const index = updatedCart.findIndex(item => item.product._id === product._id);
+
+    if (index !== -1) {
+      updatedCart[index].quantity += 1;
+    } else {
+      updatedCart.push({ product, quantity: 1 });
+    }
+
+    setCart(updatedCart);
+
+    // Actualizar stock local
+    setProductStockMap(prev => ({
+      ...prev,
+      [product._id]: available - 1
+    }));
+
+    // Guardar en backend
+    fetch("http://localhost:5000/api/cart", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: updatedCart.map(item => ({
+          product: item.product._id,
+          quantity: item.quantity
+        }))
+      })
+    });
+
+    setMessage(`Producto "${product.name}" agregado al carrito.`);
+    setTimeout(() => setMessage(""), 1800);
   }
-
-  // Validar si ya se agregó la cantidad máxima permitida
-  if (currentQtyInCart >= available) {
-    alert(`Ya has agregado la cantidad máxima disponible de "${product.name}".`);
-    return;
-  }
-
-  const updatedCart = [...cart];
-  const index = updatedCart.findIndex(item => item.product._id === product._id);
-
-  if (index !== -1) {
-    updatedCart[index].quantity += 1;
-  } else {
-    updatedCart.push({ product, quantity: 1 });
-  }
-
-  setCart(updatedCart);
-
-  // Actualizar stock local
-  setProductStockMap(prev => ({
-    ...prev,
-    [product._id]: available - 1
-  }));
-
-  // Guardar en backend
-  fetch("http://localhost:5000/api/cart", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      items: updatedCart.map(item => ({
-        product: item.product._id,
-        quantity: item.quantity
-      }))
-    })
-  });
-
-  setMessage(`Producto "${product.name}" agregado al carrito.`);
-  setTimeout(() => setMessage(""), 1800);
-}
 
   // Quitar del carrito
   function handleRemoveFromCart(id) {
@@ -358,6 +334,13 @@ export default function App() {
       } else {
         setCart([]); // por si no hay nada
       }
+
+      // Actualizar historial inmediatamente
+      fetch("http://localhost:5000/api/history", {
+        credentials: "include"
+      })
+        .then(res => res.json())
+        .then(data => setHistory(data));
 
       setMessage("¡Compra finalizada!");
       setTimeout(() => setMessage(""), 1800);
@@ -744,6 +727,8 @@ export default function App() {
     );
   }
 
+  if (loading) return null;
+
   return (
     <div className="min-h-screen bg-zinc-950">
       <header className="bg-zinc-900 text-zinc-100 p-4 shadow border-b border-zinc-800">
@@ -853,8 +838,12 @@ export default function App() {
           <>
             {view === "home" && (
               <section className="mb-12">
-                <h2 className="text-xl font-semibold mb-2 text-zinc-200">Productos destacados</h2>
-                <ProductGrid products={featuredProducts} />
+                <h2 className="text-xl font-semibold mb-4 text-zinc-200">Productos destacados</h2>
+                {featuredProducts.length > 0 ? (
+                  <ProductGrid products={featuredProducts} />
+                ) : (
+                  <p className="text-zinc-400 text-center text-lg py-8">Aún no hay productos destacados disponibles.</p>
+                )}
               </section>
             )}
             {view === "catalog" && (
@@ -863,6 +852,13 @@ export default function App() {
                   <>
                     <h2 className="text-xl font-semibold mb-2 text-zinc-200">Catálogo completo</h2>
                     <GroupedCatalog products={userProducts} />
+                    {userProducts.length > 0 ? (
+                      <GroupedCatalog products={userProducts} />
+                    ) : (
+                      <p className="text-zinc-400 text-center text-lg py-8">
+                        Aún no hay productos disponibles.
+                      </p>
+                    )}
                   </>
                 ) : (
                   <p className="text-red-500">Debes iniciar sesión para ver el catálogo.</p>

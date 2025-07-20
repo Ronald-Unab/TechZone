@@ -20,7 +20,7 @@ export default function ManageProducts({ myProducts, refreshProducts, user }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!form.name || !form.desc || !form.price || !form.file || !form.category) {
+    if (!form.name || !form.desc || !form.price || !form.stock|| !form.file || !form.category) {
       return alert("Todos los campos son obligatorios");
     }
 
@@ -78,7 +78,7 @@ export default function ManageProducts({ myProducts, refreshProducts, user }) {
   };
 
   const handleUpdate = async () => {
-    if (!form.name || !form.desc || !form.price || !form.category) {
+    if (!form.name || !form.desc || !form.price || !form.category || !form.stock) {
       return alert("Todos los campos son obligatorios");
     }
 
@@ -250,6 +250,7 @@ export default function ManageProducts({ myProducts, refreshProducts, user }) {
               />
               <h3 className="font-semibold text-lg">{product.name}</h3>
               <p className="text-sm text-zinc-300">{product.desc}</p>
+              <p className="text-sm text-green-400 mt-1">isponible: {product.stock ?? 0}</p>
               <p className="font-bold text-green-400">${product.price}</p>
               <div className="mt-3 flex gap-2">
                 <button

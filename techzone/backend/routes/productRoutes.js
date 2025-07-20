@@ -3,6 +3,7 @@ const multer = require("multer");
 const router = express.Router();
 const { addProduct, getProducts } = require("../controllers/productController");
 const Product = require("../models/Product");
+const History = require("../models/History");
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -110,6 +111,37 @@ router.get("/archived", async (req, res) => {
     res.json(archived);
   } catch (error) {
     res.status(500).json({ message: "Error al obtener productos archivados" });
+  }
+});
+
+// Obtener productos más vendidos (con stock y no archivados)
+router.get("/top-sold", async (req, res) => {
+  try {
+    const histories = await History.find({});
+    const counter = {};
+
+    histories.forEach(h => {
+      h.items.forEach(item => {
+        if (!counter[item.productId]) counter[item.productId] = 0;
+        counter[item.productId] += item.quantity;
+      });
+    });
+
+    const sorted = Object.entries(counter)
+      .sort((a, b) => b[1] - a[1])
+      .map(([productId]) => productId);
+
+    const products = await Product.find({ stock: { $gt: 0 }, archived: false });
+
+    const topSold = sorted
+      .map(id => products.find(p => p._id.toString() === id))
+      .filter(Boolean)
+      .slice(0, 4);
+
+    res.json(topSold);
+  } catch (err) {
+    console.error("Error al obtener productos más vendidos:", err);
+    res.status(500).json({ error: "Error al obtener productos destacados" });
   }
 });
 
