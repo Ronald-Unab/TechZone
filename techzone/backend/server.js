@@ -24,7 +24,7 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   store: MongoStore.create({
-    mongoUrl: process.env.MONGO_URI
+    mongoUrl: process.env.MONGO_URI,
   }),
   cookie: {
     secure: false,
@@ -46,8 +46,8 @@ mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })
-.then(() => console.log("Conectado a MongoDB"))
-.catch((err) => console.error("Error al conectar MongoDB:", err));
+  .then(() => console.log("Conectado a MongoDB"))
+  .catch((err) => console.error("Error al conectar MongoDB:", err));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Servidor corriendo en el puerto ${PORT}`));

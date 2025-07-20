@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export default function ManageProducts({ myProducts, refreshProducts, user }) {
+export default function ManageProducts({ myProducts, refreshProducts, user, setArchivedProducts }) {
   const [form, setForm] = useState({
     _id: null,
     name: "",
@@ -20,7 +20,7 @@ export default function ManageProducts({ myProducts, refreshProducts, user }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!form.name || !form.desc || !form.price || !form.stock|| !form.file || !form.category) {
+    if (!form.name || !form.desc || !form.price || !form.stock || !form.file || !form.category) {
       return alert("Todos los campos son obligatorios");
     }
 
@@ -168,13 +168,14 @@ export default function ManageProducts({ myProducts, refreshProducts, user }) {
       <div className="bg-zinc-800 p-4 rounded-lg mb-8 max-w-xl mx-auto">
         <h3 className="text-lg font-semibold mb-4">Agregar / Editar producto</h3>
         <form onSubmit={(e) => (editMode ? handleUpdate(e) : handleSubmit(e))} className="grid gap-3">
+
           <input
             type="text"
             name="name"
             placeholder="Nombre del producto"
             value={form.name}
             onChange={handleChange}
-            className="border p-2 rounded bg-zinc-700 text-white"
+            className="border border-zinc-700 bg-zinc-800 text-white p-2 rounded w-full placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <input
             type="text"
@@ -182,13 +183,13 @@ export default function ManageProducts({ myProducts, refreshProducts, user }) {
             placeholder="Descripción"
             value={form.desc}
             onChange={handleChange}
-            className="border p-2 rounded bg-zinc-700 text-white"
+            className="border border-zinc-700 bg-zinc-800 text-white p-2 rounded w-full placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <select
             name="category"
             value={form.category || ""}
             onChange={handleChange}
-            className="border p-2 rounded bg-zinc-700 text-white"
+            className="border border-zinc-700 bg-zinc-800 text-white p-2 rounded w-full placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Selecciona una categoría</option>
             <option value="PC">PC</option>
@@ -199,18 +200,20 @@ export default function ManageProducts({ myProducts, refreshProducts, user }) {
           <input
             type="number"
             name="price"
+            min="0"
             placeholder="Precio"
             value={form.price}
             onChange={handleChange}
-            className="border p-2 rounded bg-zinc-700 text-white"
+            className="border border-zinc-700 bg-zinc-800 text-white p-2 rounded w-full placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <input
             type="number"
             name="stock"
+            min="0"
             placeholder="Cantidad disponible"
             value={form.stock}
             onChange={handleChange}
-            className="border p-2 rounded bg-zinc-700 text-white"
+            className="border border-zinc-700 bg-zinc-800 text-white p-2 rounded w-full placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           {form.image && (
             <div className="mb-2">
@@ -225,7 +228,7 @@ export default function ManageProducts({ myProducts, refreshProducts, user }) {
           <input
             type="file"
             onChange={(e) => setForm({ ...form, file: e.target.files[0] })}
-            className="border p-2 rounded bg-zinc-700 text-white"
+            className="border border-zinc-700 bg-zinc-800 text-white p-2 rounded w-full placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <button
             type="submit"
@@ -250,7 +253,7 @@ export default function ManageProducts({ myProducts, refreshProducts, user }) {
               />
               <h3 className="font-semibold text-lg">{product.name}</h3>
               <p className="text-sm text-zinc-300">{product.desc}</p>
-              <p className="text-sm text-green-400 mt-1">isponible: {product.stock ?? 0}</p>
+              <p className="text-sm text-green-400 mt-1">Disponible: {product.stock ?? 0}</p>
               <p className="font-bold text-green-400">${product.price}</p>
               <div className="mt-3 flex gap-2">
                 <button

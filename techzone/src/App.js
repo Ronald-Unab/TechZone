@@ -19,21 +19,22 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   const refreshProducts = async () => {
-    if (!user) return;
-    const res = await fetch("http://localhost:5000/api/products");
-    const data = await res.json();
-    const mine = data.filter(p => p.owner === user);
-    const others = data.filter(p => p.owner !== user);
-    const archivedMine = data.filter(p => p.owner === user && p.archived);
-    const stockMap = {};
-    data.forEach(p => {
-      stockMap[p._id] = p.stock;
-    });
-    setProductStockMap(stockMap);
-    setMyProducts(mine);         // se usarán en "Administrar"
-    setUserProducts(others);     // se mostrarán en el catálogo
-    setArchivedProducts(archivedMine);
-  };
+  if (!user) return;
+  const res = await fetch("http://localhost:5000/api/products");
+  const data = await res.json();
+  const mine = data.filter(p => p.owner === user && !p.archived);
+  const others = data.filter(p => p.owner !== user && !p.archived);
+  const archivedMine = data.filter(p => p.owner === user && p.archived);
+  const stockMap = {};
+  data.forEach(p => {
+    stockMap[p._id] = p.stock;
+  });
+
+  setProductStockMap(stockMap);
+  setMyProducts(mine);               // usados en "Administrar"
+  setUserProducts(others);           // mostrados en el catálogo
+  setArchivedProducts(archivedMine); // para la vista 'Archivados'
+};
 
   useEffect(() => {
     // Verificar si hay sesión activa
@@ -384,10 +385,14 @@ export default function App() {
     const grouped = {};
 
     products.forEach(prod => {
+      if (prod.archived) return;
       if (!grouped[prod.category]) {
         grouped[prod.category] = [];
       }
-      grouped[prod.category].push(prod);
+      const alreadyExists = grouped[prod.category].some(p => p._id === prod._id);
+      if (!alreadyExists) {
+        grouped[prod.category].push(prod);
+      }
     });
 
     return (
@@ -457,6 +462,7 @@ export default function App() {
 
     const handleReAddToCart = async (items) => {
       const updated = [...cart];
+      let addedAny = false;
 
       for (const { productId, name, price, image, quantity } of items) {
         try {
@@ -473,6 +479,8 @@ export default function App() {
             alert(`Ya no hay suficiente stock para "${name}".`);
             continue;
           }
+
+          addedAny = true;
 
           const existing = updated.find(item => item.product._id === productId);
           if (existing) {
@@ -511,8 +519,10 @@ export default function App() {
         })
       });
 
-      setMessage("Productos disponibles agregados al carrito.");
-      setTimeout(() => setMessage(""), 1800);
+      if (addedAny) {
+        setMessage("Productos disponibles agregados al carrito.");
+        setTimeout(() => setMessage(""), 1800);
+      }
     };
 
     return (
@@ -781,6 +791,7 @@ export default function App() {
 
                           setUser(null);
                           setCart([]);
+                          localStorage.removeItem("lastView")
                           setView("login");
                         } catch (error) {
                           console.error("Error al cerrar sesión:", error);
@@ -839,10 +850,15 @@ export default function App() {
             {view === "home" && (
               <section className="mb-12">
                 <h2 className="text-xl font-semibold mb-4 text-zinc-200">Productos destacados</h2>
-                {featuredProducts.length > 0 ? (
-                  <ProductGrid products={featuredProducts} />
-                ) : (
-                  <p className="text-zinc-400 text-center text-lg py-8">Aún no hay productos destacados disponibles.</p>
+
+                {loading ? null : (
+                  featuredProducts.length > 0 ? (
+                    <ProductGrid products={featuredProducts} />
+                  ) : (
+                    <p className="text-zinc-400 text-center text-lg py-8">
+                      Aún no hay productos destacados disponibles.
+                    </p>
+                  )
                 )}
               </section>
             )}
@@ -851,13 +867,10 @@ export default function App() {
                 {user ? (
                   <>
                     <h2 className="text-xl font-semibold mb-2 text-zinc-200">Catálogo completo</h2>
-                    <GroupedCatalog products={userProducts} />
                     {userProducts.length > 0 ? (
                       <GroupedCatalog products={userProducts} />
                     ) : (
-                      <p className="text-zinc-400 text-center text-lg py-8">
-                        Aún no hay productos disponibles.
-                      </p>
+                      <p className="text-zinc-400">Aún no hay productos disponibles.</p>
                     )}
                   </>
                 ) : (
@@ -895,7 +908,7 @@ export default function App() {
             {view === "manage" && (
               <section>
                 {user ? (
-                  <ManageProducts myProducts={myProducts} refreshProducts={refreshProducts} user={user} />
+                  <ManageProducts myProducts={myProducts} refreshProducts={refreshProducts} user={user} setArchivedProducts={setArchivedProducts} />
                 ) : (
                   <p className="text-red-500">Debes iniciar sesión para acceder a esta sección.</p>
                 )}
