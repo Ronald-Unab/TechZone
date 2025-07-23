@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 export default function ManageProducts({ myProducts, refreshProducts, user, setArchivedProducts }) {
   const [form, setForm] = useState({
@@ -12,6 +12,8 @@ export default function ManageProducts({ myProducts, refreshProducts, user, setA
     file: null
   });
   const [editMode, setEditMode] = useState(false); // ✅ Declarado correctamente
+  const imageInputRef = useRef(null);
+
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -52,6 +54,9 @@ export default function ManageProducts({ myProducts, refreshProducts, user, setA
           image: "",
           file: null
         });
+        if (imageInputRef.current) {
+          imageInputRef.current.value = "";
+        }
         refreshProducts();
       } else {
         const error = await response.json();
@@ -111,6 +116,9 @@ export default function ManageProducts({ myProducts, refreshProducts, user, setA
           image: "",
           file: null
         });
+        if (imageInputRef.current) {
+          imageInputRef.current.value = "";
+        }
         setEditMode(false);
         refreshProducts();
       } else {
@@ -227,6 +235,7 @@ export default function ManageProducts({ myProducts, refreshProducts, user, setA
           )}
           <input
             type="file"
+            ref={imageInputRef}
             onChange={(e) => setForm({ ...form, file: e.target.files[0] })}
             className="border border-zinc-700 bg-zinc-800 text-white p-2 rounded w-full placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
@@ -249,7 +258,7 @@ export default function ManageProducts({ myProducts, refreshProducts, user, setA
               <img
                 src={`http://localhost:5000/uploads/${product.image}`}
                 alt={product.name}
-                className="w-full h-40 object-cover rounded mb-2"
+                className="h-40 w-full object-contain bg-white rounded-lg p-2"
               />
               <h3 className="font-semibold text-lg">{product.name}</h3>
               <p className="text-sm text-zinc-300">{product.desc}</p>

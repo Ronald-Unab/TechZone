@@ -27,7 +27,7 @@ router.post("/", upload.single("image"), async (req, res) => {
       category,
       image,
       owner,
-      stock: parseInt(req.body.stock) // ✅ Asignar stock
+      stock: req.body.stock !== undefined ? parseInt(req.body.stock) : undefined
     });
 
     await product.save();
@@ -61,7 +61,7 @@ router.put("/:id", upload.single("image"), async (req, res) => {
       desc,
       price,
       category,
-      stock: parseInt(req.body.stock) || undefined // ✅ stock opcional
+      stock: req.body.stock !== undefined ? parseInt(req.body.stock) : undefined
     };
 
     if (image) {
@@ -142,6 +142,20 @@ router.get("/top-sold", async (req, res) => {
   } catch (err) {
     console.error("Error al obtener productos más vendidos:", err);
     res.status(500).json({ error: "Error al obtener productos destacados" });
+  }
+});
+
+// Obtener un producto por ID
+router.get("/:id", async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+    res.json(product);
+  } catch (err) {
+    console.error("Error al buscar producto por ID:", err);
+    res.status(500).json({ error: "Error al buscar producto" });
   }
 });
 

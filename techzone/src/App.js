@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import logo from "./LogoTechzone.png";
 import Register from "./Register";
 import Login from "./Login";
 import ManageProducts from "./ManageProducts";
@@ -9,8 +10,8 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState(user ? "home" : "login");
   const [cart, setCart] = useState([]);
-  const [userProducts, setUserProducts] = useState([]); // productos de otros usuarios (para el catálogo)
-  const [myProducts, setMyProducts] = useState([]);     // productos propios (para "Administrar")
+  const [userProducts, setUserProducts] = useState([]);
+  const [myProducts, setMyProducts] = useState([]);
   const [history, setHistory] = useState([]);
   const [archived, setArchived] = useState([]);
   const [archivedProducts, setArchivedProducts] = useState([]);
@@ -19,22 +20,22 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   const refreshProducts = async () => {
-  if (!user) return;
-  const res = await fetch("http://localhost:5000/api/products");
-  const data = await res.json();
-  const mine = data.filter(p => p.owner === user && !p.archived);
-  const others = data.filter(p => p.owner !== user && !p.archived);
-  const archivedMine = data.filter(p => p.owner === user && p.archived);
-  const stockMap = {};
-  data.forEach(p => {
-    stockMap[p._id] = p.stock;
-  });
+    if (!user) return;
+    const res = await fetch("http://localhost:5000/api/products");
+    const data = await res.json();
+    const mine = data.filter(p => p.owner === user && !p.archived);
+    const others = data.filter(p => p.owner !== user && !p.archived);
+    const archivedMine = data.filter(p => p.owner === user && p.archived);
+    const stockMap = {};
+    data.forEach(p => {
+      stockMap[p._id] = p.stock;
+    });
 
-  setProductStockMap(stockMap);
-  setMyProducts(mine);               // usados en "Administrar"
-  setUserProducts(others);           // mostrados en el catálogo
-  setArchivedProducts(archivedMine); // para la vista 'Archivados'
-};
+    setProductStockMap(stockMap);
+    setMyProducts(mine);               // usados en "Administrar"
+    setUserProducts(others);           // mostrados en el catálogo
+    setArchivedProducts(archivedMine); // para la vista 'Archivados'
+  };
 
   useEffect(() => {
     // Verificar si hay sesión activa
@@ -109,18 +110,11 @@ export default function App() {
 
   // Añadir al carrito
   function handleAddToCart(product) {
-    const currentQtyInCart = cart.find(item => item.product._id === product._id)?.quantity || 0;
     const available = productStockMap[product._id] ?? product.stock ?? 0;
 
     // Validar si el producto ya no tiene stock desde el catálogo
     if (available === 0) {
       alert(`"${product.name}" ya no está disponible.`);
-      return;
-    }
-
-    // Validar si ya se agregó la cantidad máxima permitida
-    if (currentQtyInCart >= available) {
-      alert(`Ya has agregado la cantidad máxima disponible de "${product.name}".`);
       return;
     }
 
@@ -167,7 +161,7 @@ export default function App() {
     if (removedItem) {
       setProductStockMap(prev => ({
         ...prev,
-        [id]: (prev[id] || 0) + removedItem.quantity
+        [id]: removedItem.product.stock
       }));
     }
 
@@ -353,7 +347,7 @@ export default function App() {
   }
 
   // Componente productos
-  function ProductGrid({ products }) {
+  function ProductGrid({ products, productStockMap }) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {products.map(prod => (
@@ -369,7 +363,7 @@ export default function App() {
             />
             <h3 className="font-bold text-zinc-100">{prod.name}</h3>
             <p className="text-sm text-zinc-400">{prod.desc}</p>
-            <p className="text-sm text-green-400">Disponible: {prod.stock ?? 0}</p>
+            <p className="text-sm text-green-400">Disponible: {productStockMap[prod._id] ?? prod.stock ?? 0}</p>
             <span className="mt-2 text-lg font-semibold text-blue-400">${prod.price}</span>
             <button className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition"
               onClick={() => handleAddToCart(prod)}>
@@ -400,7 +394,7 @@ export default function App() {
         {Object.keys(grouped).map(category => (
           <div key={category}>
             <h3 className="text-xl font-bold mb-4 text-zinc-100 border-b border-zinc-700 pb-2">{category}</h3>
-            <ProductGrid products={grouped[category]} />
+            <ProductGrid products={grouped[category]} productStockMap={productStockMap} />
           </div>
         ))}
       </div>
@@ -464,49 +458,89 @@ export default function App() {
       const updated = [...cart];
       let addedAny = false;
 
+      const availableItems = [];
+      const unavailableItems = [];
+
       for (const { productId, name, price, image, quantity } of items) {
         try {
           const res = await fetch(`http://localhost:5000/api/products/${productId}`);
           if (!res.ok) {
-            alert(`El producto "${name}" ya no está disponible.`);
+            unavailableItems.push({ name, reason: "noDisponible" });
             continue;
           }
 
           const product = await res.json();
-          const available = productStockMap[productId] || product.stock;
 
-          if (available < quantity) {
-            alert(`Ya no hay suficiente stock para "${name}".`);
+          // ⚠️ Validar si está archivado
+          if (product.archived) {
+            unavailableItems.push({ name, reason: "noDisponible" });
             continue;
           }
 
-          addedAny = true;
+          const available = productStockMap.hasOwnProperty(productId)
+            ? productStockMap[productId]
+            : product?.stock ?? 0;
 
-          const existing = updated.find(item => item.product._id === productId);
-          if (existing) {
-            existing.quantity += quantity;
-          } else {
-            updated.push({
-              product: { _id: productId, name, price, image },
-              quantity
-            });
+          if (available < quantity) {
+            unavailableItems.push({ name, reason: "sinStock" });
+            continue;
           }
 
-          // Descontar stock local
-          setProductStockMap(prev => ({
-            ...prev,
-            [productId]: prev[productId] - quantity
-          }));
-
+          availableItems.push({ product, name, price, image, quantity });
         } catch (error) {
           console.error("Error verificando producto:", error);
-          alert(`Ocurrió un error con el producto "${name}"`);
+          unavailableItems.push({ name, reason: "error" });
         }
+      }
+
+      if (availableItems.length === 0) {
+        const sinStock = unavailableItems.filter(p => p.reason === "sinStock").map(p => p.name);
+        const noDisponibles = unavailableItems.filter(p => p.reason !== "sinStock").map(p => p.name);
+
+        let msg = "";
+        if (sinStock.length) msg += `Ya no hay suficiente stock para: ${sinStock.join(", ")}.\n`;
+        if (noDisponibles.length) msg += `Los siguientes productos ya no están disponibles: ${noDisponibles.join(", ")}.`;
+
+        alert(msg.trim());
+        return;
+      }
+
+      if (unavailableItems.length > 0) {
+        const sinStock = unavailableItems.filter(p => p.reason === "sinStock").map(p => p.name);
+        const noDisponibles = unavailableItems.filter(p => p.reason !== "sinStock").map(p => p.name);
+
+        let msg = "Algunos productos no están disponibles:\n\n";
+        if (sinStock.length) msg += `- Sin stock: ${sinStock.join(", ")}\n`;
+        if (noDisponibles.length) msg += `- No disponibles: ${noDisponibles.join(", ")}\n`;
+
+        msg += "\n¿Deseas agregar solo los productos disponibles?";
+
+        const confirm = window.confirm(msg);
+        if (!confirm) return;
+      }
+
+      for (const { product, quantity } of availableItems) {
+        const existing = updated.find(item => item.product._id === product._id);
+        if (existing) {
+          existing.quantity += quantity;
+        } else {
+          updated.push({
+            product,
+            quantity
+          });
+        }
+
+        // ✅ Mover estas dos líneas dentro del bucle
+        setProductStockMap(prev => ({
+          ...prev,
+          [product._id]: (prev[product._id] || product.stock) - quantity
+        }));
+
+        addedAny = true;
       }
 
       setCart(updated);
 
-      // Guardar en backend
       fetch("http://localhost:5000/api/cart", {
         method: "PUT",
         credentials: "include",
@@ -741,9 +775,15 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-zinc-950">
-      <header className="bg-zinc-900 text-zinc-100 p-4 shadow border-b border-zinc-800">
+      <header className="bg-zinc-900 text-zinc-100 px-4 shadow border-b border-zinc-800 flex items-center">
         <div className="container mx-auto flex justify-between items-center">
-          <h1 className="text-2xl font-bold cursor-pointer text-blue-400" onClick={() => handleNav("home")}>TechZone</h1>
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => handleNav("home")}>
+            <img
+              src={logo}
+              alt="TechZone Logo"
+              className="h-16 w-auto object-contain"
+            />
+          </div>
           <nav>
             <ul className="flex gap-6 items-center">
               <li>
@@ -853,7 +893,7 @@ export default function App() {
 
                 {loading ? null : (
                   featuredProducts.length > 0 ? (
-                    <ProductGrid products={featuredProducts} />
+                    <ProductGrid products={featuredProducts} productStockMap={productStockMap} />
                   ) : (
                     <p className="text-zinc-400 text-center text-lg py-8">
                       Aún no hay productos destacados disponibles.
